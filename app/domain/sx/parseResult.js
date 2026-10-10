@@ -198,7 +198,7 @@ module.exports = {
             "庄": "z", "和": "h", "闲": "x",
             "庄对": "zd", "闲对": "xd",
             "对子": "pair", "对": "pair",
-            "小老虎": "l", "大老虎": "k",
+            "幸运六": "l", "大老虎": "k",
             "幸运七": "q", "完美": "m","完美对": "m",
             "三宝": "sb", "四宝": "bb",
             "改": "g", "撤": "cancel", "撤销": "cancel",
@@ -206,9 +206,9 @@ module.exports = {
             "庄梭": "zs", "闲梭": "xs", "和梭": "hs",
             "庄梭哈": "zs", "闲梭哈": "xs", "和梭哈": "hs",
             "庄S": "zs", "闲S": "xs", "和S": "hs",
-            "小老虎梭": "ls", "大老虎梭": "ks","老虎梭":"n",
-            "小老虎梭哈": "ls", "大老虎梭哈": "ks","老虎梭哈":"n",
-            "小老虎S": "ls", "大老虎S": "ks", "老虎S": "n",
+            "幸运六梭": "ls", "大老虎梭": "ks","老虎梭":"n",
+            "幸运六梭哈": "ls", "大老虎梭哈": "ks","老虎梭哈":"n",
+            "幸运六S": "ls", "幸运六s": "ls", "大老虎S": "ks", "老虎S": "n",
 
             "幸运七梭": "qs", "完美梭": "ms","完美对梭": "ms",
             "幸运七梭哈": "qs", "完美梭哈": "ms","完美对梭哈": "ms",
@@ -223,7 +223,7 @@ module.exports = {
 
         // 仅兼容已知普通玩法的“类型+w/万+数字”，例如 zw1、xdw2、bb万1。
         // 不使用泛化字母匹配，避免改变梭哈、撤注、改单及未知指令的含义。
-        const typeBeforeWanPattern = /(小老虎|大老虎|幸运七|庄对|闲对|对子|三宝|四宝|Z对|X对|ZD|XD|DZ|SB|BB|庄|和|闲|对|Z|H|X|D|L|K|Q|M)[wW万](\d+)/gi;
+        const typeBeforeWanPattern = /(小老虎|幸运六|大老虎|幸运七|庄对|闲对|对子|三宝|四宝|Z对|X对|ZD|XD|DZ|SB|BB|庄|和|闲|对|Z|H|X|D|L|K|Q|M)[wW万](\d+)/gi;
         s = s.replace(typeBeforeWanPattern, (match, rawType, amount) => {
             return rawType + String(Number(amount) * 10000);
         });
@@ -233,6 +233,7 @@ module.exports = {
             z: "庄", x: "闲", h: "和",
             zd: "庄对", xd: "闲对",
             pair: "对子",
+            // 幸运六输入统一为 bet.js 和 DAO 使用的小老虎类型。
             l: "小老虎", k: "大老虎",
             ls: "小老虎梭", ks: "大老虎梭", n: "老虎梭",
             zds: "庄对梭", xds: "闲对梭",

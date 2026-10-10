@@ -38,7 +38,7 @@ assert.strictEqual(
     -1100
 );
 
-// 小老虎、大老虎和幸运7都必须按“本金 + 盈利”返还。
+// 幸运六、大老虎和幸运7都必须按“本金 + 盈利”返还。
 assert.strictEqual(
     result.do_settlement_jc_bjl(1 | 32, parameterSetup, bet({ l: 100 })).t_yl,
     -1200
@@ -46,6 +46,15 @@ assert.strictEqual(
 assert.strictEqual(
     result.do_settlement_jc_bjl(1 | 64, parameterSetup, bet({ k: 100 })).t_yl,
     -2000
+);
+// 幸运六复用 l 字段，三张庄六点也中奖；不能只按原小老虎结算。
+assert.strictEqual(
+    result.do_settlement_jc_bjl(1 | 64, parameterSetup, bet({ l: 100 })).t_yl,
+    -2000
+);
+assert.strictEqual(
+    result.do_settlement_jc_bjl(2, parameterSetup, bet({ l: 100 })).t_yl,
+    100
 );
 assert.strictEqual(
     result.do_settlement_jc_bjl(1 | 256, parameterSetup, bet({ q: 100 })).t_yl,

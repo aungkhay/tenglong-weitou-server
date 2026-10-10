@@ -183,8 +183,10 @@ let settlement_bjl = async (msg,rInfo,res) => {
                 bet.t_fh += res[i].xd + bet.xdyl;
             }    
             
-            if( isSmallTiger && res[i].l > 0 ){
-                bet.lyl +=  res[i].l * r.lucky_6_2_odds/100;    // 幸运6嬴利,这里改成小老虎
+            // l 已用于幸运六：两张、三张庄六点均中奖，按各自配置赔率结算。
+            if( (isSmallTiger || isBigTiger) && res[i].l > 0 ){
+                const lucky6Odds = isSmallTiger ? r.lucky_6_2_odds : r.lucky_6_3_odds;
+                bet.lyl += res[i].l * lucky6Odds/100;
                 bet.lyl = bet.lyl >= 0 ? Math.floor(bet.lyl) : Math.trunc(bet.lyl);
                 bet.t_fh += res[i].l + bet.lyl;
             }    
@@ -567,8 +569,9 @@ let settlement_jc_bjl = (result_code,parameter_setup,re) => {
         bet.t_fh += re.xd + re.xd * r.pair_odds/100;
     }    
         
-    if( isSmallTiger && re.l > 0 ){
-        bet.t_fh += re.l + re.l * r.lucky_6_2_odds/100;
+    if( (isSmallTiger || isBigTiger) && re.l > 0 ){
+        const lucky6Odds = isSmallTiger ? r.lucky_6_2_odds : r.lucky_6_3_odds;
+        bet.t_fh += re.l + Math.floor(re.l * lucky6Odds/100);
     }    
 
     if( isBigTiger && re.k > 0 ){
