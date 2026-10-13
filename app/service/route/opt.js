@@ -470,6 +470,16 @@ router.post('/lottery_draw', async function(req, res) {
     doOpt(data,res);
 })
 
+router.post('/lottery_auto_draw', async function(req, res) {                                               
+    let data = req.body.data ? req.body.data : req.body;
+    await redlock.lock("lottery_auto_draw:" + "00000",1000);
+    if(!data.group_nickname || data.group_nickname == ""){
+        return res.send({code:500,msg:"必须要填写群昵称",data:null}); 
+    }
+    data.Event = HG_DEF.EVENT.EV_DEALER_CHECKOUT_REQ;
+    doOpt(data,res);
+})
+
 router.post('/edit_shoe', async function(req, res) {                                                  
     let data = req.body.data ? req.body.data : req.body;
     await redlock.lock("edit_shoe:" + data.userId,1000);

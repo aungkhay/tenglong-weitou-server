@@ -51,7 +51,7 @@ async function tokenMiddleware(req, res, next) {
 
 
     // 修复问题2：使用 req.path 过滤参数，防止匹配失效
-    const noChkPaths = ["/user/login", "/user/control_login", "/user/agent_login", "/user/regist", "/opt/bot"];
+    const noChkPaths = ["/user/login", "/user/control_login", "/user/agent_login", "/user/regist", "/opt/bot", "/opt/lottery_auto_draw"];
     // 如果是静态资源或白名单，直接放行
     if (req.path.startsWith("/statics") || noChkPaths.includes(req.path)) {
         return next();

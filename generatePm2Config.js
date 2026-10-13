@@ -4,11 +4,11 @@
  * 根据pomelo 的 servers.json 生成 pm2 启动文件
  */
 
-var masterJsonFile = require('../game-server/config/master.json');
-var serversJosnFile = require('../game-server/config/servers.json');
+var masterJsonFile = require('./config/master.json');
+var serversJosnFile = require('./config/servers.json');
 
 //pomelo 源码目录
-var cwd='./game-server';
+var cwd='./';
 
 //配置运行环境 development production
 var envType= 'development';
@@ -100,7 +100,7 @@ var resultFileStr = JSON.stringify(resultJson);
 
 var fs = require('fs');
 
-fs.writeFile('../pomeloPm2Start.json', resultFileStr, function (err) {
+fs.writeFile('./pomeloPm2Start.json', resultFileStr, function (err) {
     if (err) {
         console.log(err);
     } else {
