@@ -16,10 +16,12 @@ function setup(send) {
         GMResponse: require('../domain/GMResponse'), CODE: { STOP_BET2: { code: '90', msg: '停止下注' } },
         config: { imgPath: { curSystem: 'test', test: '/images' } },
         sendChat: { sendImageMessage: async (...args) => { calls.push(args); return send(); } },
+        sendStopImageOnce: (room, send) => send(),
         console: { log() {}, error() {} }
     });
     const room = new Room();
-    room.roomInfo = { cc: 1, jc: 2, startMsgId: '10', gameState: 1, chat_id: 'group', img2_after_start: '/stop.png' };
+    room.cancelAutoStopImage = () => {};
+    room.roomInfo = { cc: 1, jc: 2, startMsgId: '10', gameState: 1, chat_id: 'group', img_stop: '/stop.png' };
     room.updateLastStopMsgId = id => { room.roomInfo.lastStopMsgId = id; };
     room.doStopBet = () => { room.roomInfo.gameState = 2; };
     room.updateGame = () => {};
@@ -27,6 +29,20 @@ function setup(send) {
     return { room, calls, run };
 }
 const success = () => ({ data: { data: { msgId: '676216923775565801' } } });
+
+test('send_index stop request skips image upload when the round is already stopped', async () => {
+    for (const stopped of [{ gameState: 2 }, { gameState: '2' }, { gameState: 6 },
+        { gameState: 3 }, { gameState: 5 }, { gameState: 0 }, { isCurRoundStopBet: true }]) {
+        const { room, calls, run } = setup(success);
+        Object.assign(room.roomInfo, stopped, { lastStopMsgId: '123' });
+        const result = await run();
+        assert.equal(result.code, '90');
+        assert.equal(result.data.skipped, true);
+        assert.equal(result.data.msgId, '123');
+        assert.equal(calls.length, 0);
+        assert.equal(room.roomInfo.lastStopMsgId, '123');
+    }
+});
 
 test('发送接口保留大整数精度，不修改字符串内容', () => {
     const result = parse('{"code":200,"data":{"msgId":676216923775565801},"text":"数字 676216923775565801"}');
@@ -67,5 +83,16 @@ test('其他停止入口仍可使用已发送的消息ID', async () => {
     const result = await run({ server_send_stop_image: false, msgId: '123' });
     assert.equal(result.code, '90');
     assert.equal(result.data.msgId, '123');
+    assert.equal(calls.length, 0);
+});
+
+test('uploaded stop image is recorded without sending; older-round callbacks are rejected', async () => {
+    const { room, calls, run } = setup(success);
+    assert.equal((await run({ server_send_stop_image: false, tool_uploaded_stop_image: true, msgId: '9' })).code, 500);
+    assert.equal(room.roomInfo.gameState, 1);
+    const result = await run({ server_send_stop_image: false, tool_uploaded_stop_image: true, msgId: '123' });
+    assert.equal(result.code, '90');
+    assert.equal(room.roomInfo.lastStopMsgId, '123');
+    assert.equal(room.roomInfo.gameState, 2);
     assert.equal(calls.length, 0);
 });

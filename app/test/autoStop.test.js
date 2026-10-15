@@ -6,24 +6,33 @@ const test = require('node:test');
 
 function setup(send = async () => ({ data: { data: { msgId: '123' } } })) {
     const source = fs.readFileSync(path.join(__dirname, '../domain/sx/sxRoom.js'), 'utf8');
-    const begin = source.indexOf('sxRoom.prototype.doAutoSendAfterStartImage =');
+    const begin = source.indexOf('sxRoom.prototype.cancelAutoStopImage =');
     const end = source.indexOf('sxRoom.prototype.updateLastStopMsgId =', begin);
     function Room() {}
     const timers = [], notices = [], uploads = [];
-    vm.runInNewContext(source.slice(begin, end), {
-        sxRoom: Room, GAMESTATE: { BET: 1 },
+    const stopBegin = source.indexOf('sxRoom.prototype.stopBet =');
+    const stopEnd = source.indexOf('sxRoom.prototype.pushResult =', stopBegin);
+    const pauseBegin = source.indexOf('sxRoom.prototype.pauseGame =');
+    const pauseEnd = source.indexOf('\nsxRoom.prototype.', pauseBegin + 1);
+    vm.runInNewContext(source.slice(begin, end) + source.slice(stopBegin, stopEnd) + source.slice(pauseBegin, pauseEnd), {
+        sxRoom: Room, GAMESTATE: { BET: 1, STOP_BET: 2, PAUSE: 3 },
+        GMResponse: require('../domain/GMResponse'), CODE: { STOP_BET2: { code: '90', msg: '停止下注' } },
         config: { imgPath: { curSystem: 'test', test: '/images' } },
         setTimeout: (fn, delay) => timers.push({ fn, delay }),
+        clearTimeout: id => { timers[id - 1].cancelled = true; },
         sendChat: { sendImageMessage: (...args) => { uploads.push(args); return send(); } },
+        sendStopImageOnce: (room, send) => send(),
         sendToFront: { sendNoticeToClient: (...args) => notices.push(args) },
         console: { log() {}, error() {} }
     });
     const room = new Room();
     room.roomInfo = { cc: 1, jc: 2, quick_mode: 1, quickModeJc: 3,
         gameState: 1, auto_send_img2_after_start: 1, second_send_img2_after_start: 10,
-        img2_after_start: '/stop.png', chat_id: 'group' };
+        img2_after_start: '/stop.png', img_stop: '/manual-stop.png', chat_id: 'group' };
     room.updateLastStopMsgId = id => { room.roomInfo.lastStopMsgId = id; };
-    room.doStopBet = async () => { room.roomInfo.gameState = 2; };
+    room.doStopBet = async () => { room.cancelAutoStopImage(); room.roomInfo.gameState = 2; };
+    room.setStateRedis = () => {};
+    room.updateGame = () => {};
     return { room, timers, notices, uploads };
 }
 
@@ -36,6 +45,67 @@ test('quick-mode auto stop survives settlement of the previous round', async () 
     assert.equal(uploads.length, 1);
     assert.equal(room.roomInfo.gameState, 2);
     assert.equal(room.roomInfo.lastStopMsgId, '123');
+});
+
+test('pause upload cancels the image 2 timer and blocks an already queued callback', async () => {
+    let finish;
+    const { room, timers, uploads } = setup(() => new Promise(resolve => { finish = resolve; }));
+    await room.doAutoSendAfterStartImage();
+    const pause = new Promise(resolve => room.pauseGame({}, resolve));
+    assert.equal(timers[0].cancelled, true);
+    await timers[0].fn();
+    assert.equal(uploads.length, 1);
+    finish({ data: { data: { msgId: '123' } } });
+    await pause;
+    await timers[0].fn();
+    assert.equal(uploads.length, 1);
+});
+
+test('replaced room state cannot leave an old image 2 timer active', async () => {
+    const { room, timers, uploads } = setup();
+    await room.doAutoSendAfterStartImage();
+    room.roomInfo = { ...room.roomInfo, gameState: 2, isCurRoundStopBet: true };
+    await timers[0].fn();
+    assert.equal(uploads.length, 0);
+});
+
+test('manual stop in flight prevents automatic image 2 from sending', async () => {
+    let finish;
+    const { room, timers, uploads } = setup(() => new Promise(resolve => { finish = resolve; }));
+    await room.doAutoSendAfterStartImage();
+    const manual = new Promise(resolve => room.stopBet({ server_send_stop_image: true }, resolve));
+    await timers[0].fn();
+    assert.equal(uploads.length, 1);
+    finish({ data: { data: { msgId: '123' } } });
+    assert.equal((await manual).code, '90');
+    assert.equal(room.roomInfo.gameState, 2);
+    assert.equal(room._sendingToolStopImage, false);
+});
+
+test('automatic stop in flight prevents manual duplicate and releases guard on completion', async () => {
+    let finish;
+    const { room, timers, uploads } = setup(() => new Promise(resolve => { finish = resolve; }));
+    await room.doAutoSendAfterStartImage();
+    const automatic = timers[0].fn();
+    const manual = await new Promise(resolve => room.stopBet({ server_send_stop_image: true }, resolve));
+    assert.equal(manual.code, 500);
+    assert.equal(uploads.length, 1);
+    finish({ data: { data: { msgId: '123' } } });
+    await automatic;
+    assert.equal(room.roomInfo.gameState, 2);
+    assert.equal(room._sendingToolStopImage, false);
+});
+
+test('failed automatic upload releases guard so manual stop can retry', async () => {
+    let attempts = 0;
+    const { room, timers, uploads } = setup(async () => ++attempts === 1
+        ? { err: 'failed' } : { data: { data: { msgId: '123' } } });
+    await room.doAutoSendAfterStartImage();
+    await timers[0].fn();
+    assert.equal(room._sendingToolStopImage, false);
+    const manual = await new Promise(resolve => room.stopBet({ server_send_stop_image: true }, resolve));
+    assert.equal(manual.code, '90');
+    assert.equal(uploads.length, 2);
 });
 
 test('image 2 is skipped when betting already stopped before the timer fires', async () => {

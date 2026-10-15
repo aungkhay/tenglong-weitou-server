@@ -197,13 +197,24 @@ router.post('/send_index', async function(req, res) {
     }
     
     if(data.index == 2){
-        // index=2 是发送指令，不再依赖工具上传图片后的回调。
-        msg.server_send_stop_image = true;
+        // 带 msgId 的请求是工具已发图后的通知，不能再发送第二张。
+        const hasSentImage = data.msgId !== undefined && data.msgId !== null && data.msgId !== '';
+        if (hasSentImage && (!/^\d+$/.test(String(data.msgId)) || BigInt(String(data.msgId)) <= 0n ||
+            (typeof data.msgId === 'number' && !Number.isSafeInteger(data.msgId)))) {
+            return res.send({code:500,msg:"截止图片消息ID无效，请传入精确的字符串ID",data:null});
+        }
+        msg.server_send_stop_image = !hasSentImage;
+        msg.tool_uploaded_stop_image = hasSentImage;
+        if (hasSentImage) msg.msgId = String(data.msgId);
+        console.log('[send_index:2]', {roomId: msg.roomId,
+            action: hasSentImage ? 'record_uploaded_image' : 'send_image', msgId: msg.msgId});
         return pomelo.app.rpc.bjl.bjlRemote.stopBet(1,msg,function(result){
             if (!result || String(result.code) !== '90') {
                 return res.send({code:500,msg:result && result.msg || "服务器发送截止图片失败",data:null});
             }
-            return res.send({code:200,msg:"截止图片发送成功",data:result.data});
+            return res.send({code:200,msg:result.data && result.data.skipped
+                ? "本局已停止下注，无需重复发送截止图片"
+                : hasSentImage ? "截止图片已确认" : "截止图片发送成功",data:result.data});
         });
     }
     return res.send({code:200,msg:"上传成功",data:null}); 

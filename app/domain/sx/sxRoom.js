@@ -13,6 +13,7 @@ let settlement = require("./result");
 let config = require('../../../config/config.json');
 const parseResult = require('./parseResult');
 const sendChat = require("../../chat/sendChat");
+const sendStopImageOnce = require('./sendStopImageOnce');
 const moment = require('moment');
 const virtualBetModule = require("./virtualBet");
 const sendToFront = require("./sendToFrontEnd");
@@ -275,11 +276,20 @@ sxRoom.prototype.setHztp = async function(msg,cb){                              
 // 暂停游戏功能无效
 sxRoom.prototype.pauseGame = async function(msg,cb) {
     let rInfo = this.roomInfo;
-    if(rInfo.gameState == GAMESTATE.BET){
+    if (this._sendingToolStopImage) {
+        return cb(new GMResponse(500,msg.rType,msg.roomId,"截止图片正在发送，请稍后确认",null));
+    }
+    this.cancelAutoStopImage();
+    if(rInfo.gameState == GAMESTATE.BET && !rInfo.isCurRoundStopBet && !this._sendingToolStopImage){
+        this._sendingToolStopImage = true;
+        try {
         // 发送截止投注图
         let fileName = rInfo.img2_after_start.split('/').pop();
         let imagePath = config.imgPath[config.imgPath.curSystem] + "/" + fileName;
-        let r = await sendChat.sendImageMessage(imagePath,fileName,rInfo.chat_id);
+        let r = await sendStopImageOnce(this, () => sendChat.sendImageMessage(imagePath,fileName,rInfo.chat_id));
+        } finally {
+            this._sendingToolStopImage = false;
+        }
     }
     rInfo.gameState = GAMESTATE.PAUSE;
     this.setStateRedis();
@@ -433,6 +443,7 @@ sxRoom.prototype.startBet = async function(){                                   
     rInfo.isEditShoeRound = false
     rInfo.lastStopMsgId =  null;
     rInfo.isCurRoundStopBet = false;
+    rInfo.stopImageSessionId = String(rInfo.startMsgId || require('crypto').randomBytes(16).toString('hex'));
 
     // 如果是空局，直接进入停止下注状态，不发图片了
     rInfo.gameState = rInfo.isEmptyGame ? GAMESTATE.PAUSE : GAMESTATE.BET;
@@ -466,7 +477,15 @@ sxRoom.prototype.doAutoSendStartImg = async function(){
     return true;
 }
 
+sxRoom.prototype.cancelAutoStopImage = function(){
+    if (this._autoStopImageTimer != null) {
+        clearTimeout(this._autoStopImageTimer);
+        this._autoStopImageTimer = null;
+    }
+};
+
 sxRoom.prototype.doAutoSendAfterStartImage = async function(){
+        this.cancelAutoStopImage();
         // 是否自动发送开始后的图1(还有无)
         let rInfo = this.roomInfo;
         let self = this;
@@ -489,18 +508,20 @@ sxRoom.prototype.doAutoSendAfterStartImage = async function(){
             const thisCc = rInfo.cc;
             const bettingRound = () => rInfo.quick_mode === 1 ? rInfo.quickModeJc : rInfo.jc;
             const thisJc = bettingRound();
-            const isCurrentBet = () => self._autoImageSession === autoImageSession &&
+            const isCurrentBet = () => self.roomInfo === rInfo && self._autoImageSession === autoImageSession &&
                 rInfo.cc === thisCc && bettingRound() === thisJc &&
                 !rInfo.isCurRoundStopBet &&
                 !rInfo.hztp && !rInfo.isEmptyGame && rInfo.gameState == GAMESTATE.BET;
-            setTimeout(async () => {
+            this._autoStopImageTimer = setTimeout(async () => {
                 console.log("自动发送停止投注时的状态：",rInfo.gameState);
-                if (!isCurrentBet()) return;
+                if (!isCurrentBet() || self._sendingToolStopImage) return;
+                // 手动截止和自动图2共用发送锁，在上传完成之前也不能重复发送。
+                self._sendingToolStopImage = true;
                 try {
                     let fileName = String(rInfo.img2_after_start || '').split('/').pop();
                     if (!fileName || !rInfo.chat_id) throw new Error("未配置自动截止图片或聊天群");
                     let imagePath = config.imgPath[config.imgPath.curSystem] + "/" + fileName;
-                    let r = await sendChat.sendImageMessage(imagePath,fileName,rInfo.chat_id);
+                    let r = await sendStopImageOnce(self, () => sendChat.sendImageMessage(imagePath,fileName,rInfo.chat_id));
                     if (!isCurrentBet()) return;
                     const msgId = r && r.data && r.data.data && r.data.data.msgId;
                     if (!r || r.err || !/^\d+$/.test(String(msgId)) || BigInt(String(msgId)) <= 0n ||
@@ -513,6 +534,8 @@ sxRoom.prototype.doAutoSendAfterStartImage = async function(){
                     console.error("[自动截止下注失败]", err);
                     if (isCurrentBet()) sendToFront.sendNoticeToClient(rInfo.chat_group_nickname,
                         {type:1,msg:"自动截止下注失败：" + err.message});
+                } finally {
+                    self._sendingToolStopImage = false;
                 }
             }, rInfo.second_send_img2_after_start * 1000);    
         }
@@ -567,12 +590,18 @@ sxRoom.prototype.updateLastStopMsgId = function(msgId){
 }
 
 sxRoom.prototype.doStopBet = async function(){
+    this.cancelAutoStopImage();
     let rInfo = this.roomInfo;
     // 暂停游戏状态只有开始下注时状态会改变，其它保持不变
     if(GAMESTATE.STOP_BET != rInfo.gameState){
         rInfo.gameState = GAMESTATE.STOP_BET;            // 防止泡泡截止图片显示慢一点
     }
     rInfo.isCurRoundStopBet = true;
+    try {
+        await sendStopImageOnce.markStopped(this);
+    } catch (err) {
+        console.error('[记录本局截止失败]', err);
+    }
     
     this.setStateRedis();
     this.pushGameInfoToClient();
@@ -949,22 +978,39 @@ sxRoom.prototype.updateGame = function(msg){
 // 手动发送图片都是正确的
 sxRoom.prototype.stopBet = async function(msg,cb) {
     let rInfo = this.roomInfo;
+    if (msg.tool_uploaded_stop_image && rInfo.startMsgId &&
+        BigInt(String(msg.msgId)) <= BigInt(String(rInfo.startMsgId))) {
+        return cb(new GMResponse(500,rInfo.rType,rInfo.Id,"截止图片早于本局开始，忽略旧图片通知",null));
+    }
     if (msg.server_send_stop_image) {
+        if (rInfo.isCurRoundStopBet || Number(rInfo.gameState) !== GAMESTATE.BET) {
+            console.log('[send_index:2 skipped]', {
+                roomId: rInfo.Id, cc: rInfo.cc, jc: rInfo.jc,
+                gameState: rInfo.gameState, isCurRoundStopBet: rInfo.isCurRoundStopBet
+            });
+            return cb(new GMResponse(CODE.STOP_BET2.code,rInfo.rType,rInfo.Id,"本局已停止下注，无需重复发送截止图片",{
+                state: rInfo.gameState, cc: rInfo.cc, jc: rInfo.jc,
+                msgId: rInfo.lastStopMsgId, skipped: true
+            }));
+        }
         const fail = text => cb(new GMResponse(500,rInfo.rType,rInfo.Id,text,null));
         if (this._sendingToolStopImage) return fail("截止图片正在发送，请稍后确认");
-        if (![GAMESTATE.BET, GAMESTATE.STOP_BET].includes(rInfo.gameState)) {
-            //return fail("当前状态不能发送截止图片");
-        }
         const chatId = String(msg.chat_id || rInfo.chat_id || '').trim();
         const fileName = String(rInfo.img_stop || '').split('/').pop();   //img2_after_start
         if (!chatId || !fileName) return fail("未配置聊天群或截止图片");
         const cc = rInfo.cc;
-        const jc = rInfo.jc;
+        const bettingRound = () => Number(rInfo.quick_mode) === 1 ? rInfo.quickModeJc : rInfo.jc;
+        const jc = bettingRound();
         const startMsgId = rInfo.startMsgId;
+        this.cancelAutoStopImage();
         this._sendingToolStopImage = true;
         try {
             const imagePath = config.imgPath[config.imgPath.curSystem] + '/' + fileName;
-            const result = await sendChat.sendImageMessage(imagePath,fileName,chatId);
+            const result = await sendStopImageOnce(this, () => sendChat.sendImageMessage(imagePath,fileName,chatId));
+            if (this.roomInfo !== rInfo || rInfo.cc !== cc || bettingRound() !== jc ||
+                rInfo.startMsgId !== startMsgId) {
+                return fail("下注局已变化，忽略上一局截止图片结果");
+            }
             console.log("[服务器发送截止图片结果]", result);
             const sentMsgId = result && result.data && result.data.data && result.data.data.msgId;
             if (!result || result.err || !/^\d+$/.test(String(sentMsgId)) ||
