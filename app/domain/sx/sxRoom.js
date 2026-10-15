@@ -443,7 +443,6 @@ sxRoom.prototype.startBet = async function(){                                   
     rInfo.isEditShoeRound = false
     rInfo.lastStopMsgId =  null;
     rInfo.isCurRoundStopBet = false;
-    rInfo.stopImageSessionId = String(rInfo.startMsgId || require('crypto').randomBytes(16).toString('hex'));
 
     // 如果是空局，直接进入停止下注状态，不发图片了
     rInfo.gameState = rInfo.isEmptyGame ? GAMESTATE.PAUSE : GAMESTATE.BET;
@@ -521,7 +520,7 @@ sxRoom.prototype.doAutoSendAfterStartImage = async function(){
                     let fileName = String(rInfo.img2_after_start || '').split('/').pop();
                     if (!fileName || !rInfo.chat_id) throw new Error("未配置自动截止图片或聊天群");
                     let imagePath = config.imgPath[config.imgPath.curSystem] + "/" + fileName;
-                    let r = await sendStopImageOnce(self, () => sendChat.sendImageMessage(imagePath,fileName,rInfo.chat_id));
+                    let r = await sendChat.sendImageMessage(imagePath,fileName,rInfo.chat_id);
                     if (!isCurrentBet()) return;
                     const msgId = r && r.data && r.data.data && r.data.data.msgId;
                     if (!r || r.err || !/^\d+$/.test(String(msgId)) || BigInt(String(msgId)) <= 0n ||
@@ -597,11 +596,6 @@ sxRoom.prototype.doStopBet = async function(){
         rInfo.gameState = GAMESTATE.STOP_BET;            // 防止泡泡截止图片显示慢一点
     }
     rInfo.isCurRoundStopBet = true;
-    try {
-        await sendStopImageOnce.markStopped(this);
-    } catch (err) {
-        console.error('[记录本局截止失败]', err);
-    }
     
     this.setStateRedis();
     this.pushGameInfoToClient();
@@ -1006,7 +1000,7 @@ sxRoom.prototype.stopBet = async function(msg,cb) {
         this._sendingToolStopImage = true;
         try {
             const imagePath = config.imgPath[config.imgPath.curSystem] + '/' + fileName;
-            const result = await sendStopImageOnce(this, () => sendChat.sendImageMessage(imagePath,fileName,chatId));
+            const result = await sendChat.sendImageMessage(imagePath,fileName,chatId);
             if (this.roomInfo !== rInfo || rInfo.cc !== cc || bettingRound() !== jc ||
                 rInfo.startMsgId !== startMsgId) {
                 return fail("下注局已变化，忽略上一局截止图片结果");
