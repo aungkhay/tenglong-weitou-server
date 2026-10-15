@@ -491,6 +491,7 @@ sxRoom.prototype.doAutoSendAfterStartImage = async function(){
             const thisJc = bettingRound();
             const isCurrentBet = () => self._autoImageSession === autoImageSession &&
                 rInfo.cc === thisCc && bettingRound() === thisJc &&
+                !rInfo.isCurRoundStopBet &&
                 !rInfo.hztp && !rInfo.isEmptyGame && rInfo.gameState == GAMESTATE.BET;
             setTimeout(async () => {
                 console.log("自动发送停止投注时的状态：",rInfo.gameState);

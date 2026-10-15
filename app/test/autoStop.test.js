@@ -38,6 +38,21 @@ test('quick-mode auto stop survives settlement of the previous round', async () 
     assert.equal(room.roomInfo.lastStopMsgId, '123');
 });
 
+test('image 2 is skipped when betting already stopped before the timer fires', async () => {
+    for (const stoppedState of [
+        { gameState: 2 },
+        { gameState: 1, isCurRoundStopBet: true }
+    ]) {
+        const { room, timers, uploads, notices } = setup();
+        await room.doAutoSendAfterStartImage();
+        Object.assign(room.roomInfo, stoppedState, { lastStopMsgId: '100' });
+        await timers[0].fn();
+        assert.equal(uploads.length, 0);
+        assert.equal(notices.length, 0);
+        assert.equal(room.roomInfo.lastStopMsgId, '100');
+    }
+});
+
 test('old timers and late upload responses cannot stop a new betting session', async () => {
     let finish;
     const { room, timers, uploads } = setup(() => new Promise(resolve => { finish = resolve; }));
