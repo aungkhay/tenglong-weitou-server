@@ -14,6 +14,7 @@ const e = require('express');
 module.exports = {
     tempBetCache: {},
     pendingImportNotices: {},
+    receivedBetMessageIds: {},
 
     doBet: async function(msg, rInfo, strTempBet, areaNum, redis, cb) {
         // opt.js 提前发现的错误不立即提示，暂存到导表阶段统一发送。
@@ -72,6 +73,14 @@ module.exports = {
             }
 
             msg.userId = user.Id;
+            const messageKey = msg.msgId == null ? null : String(msg.msgId);
+            const received = this.receivedBetMessageIds[rInfo.Id] ||
+                (this.receivedBetMessageIds[rInfo.Id] = new Set());
+            if (messageKey && received.has(messageKey)) {
+                lock.unlock();
+                cb(new GMResponse(CODE.BET_SUCCESS.code, rInfo.rType, rInfo.Id, CODE.BET_SUCCESS.msg, data));
+                return;
+            }
             msg.xzmx = msg.bet;
             // 保留客户发来的原始下注字串，供失败缓存和后续重试使用。
             msg.originalXzmx = msg.bet;
@@ -191,6 +200,7 @@ module.exports = {
                 ...cacheMsg,
                 cachedAt: Date.now()
             });
+            if (messageKey) received.add(messageKey);
 
             console.log("[内存缓存] 下注已存入：tableId=" + tableId + ", userId=" + msg.userId + ", msgId=" + msg.msgId + ", 缓存数量=" + this.tempBetCache[tableId][msg.userId].length);
 
@@ -2159,6 +2169,7 @@ module.exports = {
     },
     // ✅ 清空指定 tableId 的所有缓存
     clearBetCache: function(tableId) {
+        delete this.receivedBetMessageIds[tableId];
         if (this.tempBetCache[tableId]) {
             const count = Object.keys(this.tempBetCache[tableId]).length;
             delete this.tempBetCache[tableId];

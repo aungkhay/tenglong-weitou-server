@@ -165,7 +165,8 @@ router.post('/get_player_bet_data', async function(req, res) {
         let re = await cache.get(stateRedisKey);
         if(!!re){
             msg.shoe = re.cc ? re.cc : msg.shoe;
-            msg.round = re.jc ? re.jc : msg.round;
+            const bettingRound = Number(re.quick_mode) === 1 ? re.quickModeJc : re.jc;
+            msg.round = bettingRound || msg.round;
         }
 
         console.log("==============================获取投注表数据，场次局次：", msg.shoe, msg.round);

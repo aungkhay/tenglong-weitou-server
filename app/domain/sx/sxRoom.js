@@ -630,7 +630,7 @@ sxRoom.prototype.testBet = function(){
 }
 
 sxRoom.prototype.doBet = async  function(msg,cb){ 
-    bet.doBet(msg,this.roomInfo,this.strTempBet,this.areaNum,this.redis,cb);  // 下注  
+    return bet.doBet(msg,this.roomInfo,this.strTempBet,this.areaNum,this.redis,cb);  // 下注
 }
 
 sxRoom.prototype.flushBetsToDb = async function(msg,cb){ 

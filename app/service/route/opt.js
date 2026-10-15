@@ -878,7 +878,7 @@ async function setMgrRemark(payload) {
 router.post('/bot', async function(req, res) {    
     let data = req.body.data ? req.body.data : req.body;
     data.msg = data.msg.replace(/"chatId":(\d+)/, '"chatId":"$1"');
-    data.msg = JSON.parse(data.msg);
+    data.msg = require('../../util/parseMessageResponse')(data.msg);
 
     const timestamp = req.headers["x-timestamp"];
     const token = req.headers["x-token"];

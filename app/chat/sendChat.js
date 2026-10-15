@@ -77,8 +77,10 @@ sendChat.sendTextMessage = async function(message, groupId , config = null) {
     }
     let res = await sendGroupMessage(groupId, message, {}, config);
     console.log(`发送数据${message},返回结果：${JSON.stringify(res)}`);
+    return res;
   } catch (error) {
     console.error('❌ 发送失败:', error.message);
+    return { err: error.message };
   }
 }
 

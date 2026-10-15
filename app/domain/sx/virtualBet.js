@@ -2,6 +2,7 @@ const virtualBetDao = require('../../dao/virtualBetDao');
 const sendChat = require('../../chat/sendChat');
 const virtualBet_token = require('../../../config/token');
 const GAMESTATE = require('../../util/gameMsg');
+const cacheVirtualBet = require('./cacheVirtualBet');
 
 // 🚀 核心优化 1：直接引入与 token 在同目录下的 virtualBet.json 配置文件
 // 提示：根据你原本 token 的路径 '../../config/token'，json 的相对路径应该也是一样的
@@ -258,6 +259,7 @@ module.exports = {
                                 }
                                 if (cfg) {
                                     const sendResult = await sendChat.sendTextMessage(cmd, targetChatId, cfg);
+                                    await cacheVirtualBet(room, bot, cmd, sendResult, roundToken, startMsgId);
                                 }
                             }catch(e){ console.error("virtualBet send err:", e); }
                             await sleep(rand(0,1000));

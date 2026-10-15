@@ -744,7 +744,6 @@ playerDao.getPlayerBetData = async function (msg) {
 
             INNER JOIN user u
                 ON u.Id = g.userId
-                AND u.yxtz = 1
 
             WHERE ${condition}
               AND g.closed = 0
