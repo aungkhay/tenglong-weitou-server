@@ -470,6 +470,8 @@ sxRoom.prototype.doAutoSendAfterStartImage = async function(){
         // 是否自动发送开始后的图1(还有无)
         let rInfo = this.roomInfo;
         let self = this;
+        const autoImageSession = {};
+        this._autoImageSession = autoImageSession;
         if(rInfo.auto_send_img1_after_start && !rInfo.hztp && !rInfo.isEmptyGame){
              const thisJc = rInfo.jc;
              setTimeout(async () => {
@@ -484,21 +486,32 @@ sxRoom.prototype.doAutoSendAfterStartImage = async function(){
         
         // 自动发送开始后的图2 (停止下注)
         if(rInfo.auto_send_img2_after_start && !rInfo.hztp && !rInfo.isEmptyGame){
-            const thisJc = rInfo.jc;
+            const thisCc = rInfo.cc;
+            const bettingRound = () => rInfo.quick_mode === 1 ? rInfo.quickModeJc : rInfo.jc;
+            const thisJc = bettingRound();
+            const isCurrentBet = () => self._autoImageSession === autoImageSession &&
+                rInfo.cc === thisCc && bettingRound() === thisJc &&
+                !rInfo.hztp && !rInfo.isEmptyGame && rInfo.gameState == GAMESTATE.BET;
             setTimeout(async () => {
                 console.log("自动发送停止投注时的状态：",rInfo.gameState);
-                if(!rInfo.hztp && !rInfo.isEmptyGame && rInfo.gameState == GAMESTATE.BET && rInfo.jc === thisJc){
-                    let fileName = rInfo.img2_after_start.split('/').pop();
+                if (!isCurrentBet()) return;
+                try {
+                    let fileName = String(rInfo.img2_after_start || '').split('/').pop();
+                    if (!fileName || !rInfo.chat_id) throw new Error("未配置自动截止图片或聊天群");
                     let imagePath = config.imgPath[config.imgPath.curSystem] + "/" + fileName;
                     let r = await sendChat.sendImageMessage(imagePath,fileName,rInfo.chat_id);
-                    if(r.err){    
-                        console.log("上传截止下注图片失败");
-                        sendToFront.sendNoticeToClient(rInfo.chat_group_nickname, {type:1,msg:"上传截止下注图片失败"});
-                        return false;
+                    if (!isCurrentBet()) return;
+                    const msgId = r && r.data && r.data.data && r.data.data.msgId;
+                    if (!r || r.err || !/^\d+$/.test(String(msgId)) || BigInt(String(msgId)) <= 0n ||
+                        (typeof msgId === 'number' && !Number.isSafeInteger(msgId))) {
+                        throw new Error((r && (r.message || r.err)) || "截止图片未返回有效消息ID");
                     }
-                    console.log("=====================自动截止投注上传图片成功：==================",r.data.data.msgId);
-                    self.updateLastStopMsgId(r.data.data.msgId);
-                    self.doStopBet();
+                    self.updateLastStopMsgId(String(msgId));
+                    await self.doStopBet();
+                } catch (err) {
+                    console.error("[自动截止下注失败]", err);
+                    if (isCurrentBet()) sendToFront.sendNoticeToClient(rInfo.chat_group_nickname,
+                        {type:1,msg:"自动截止下注失败：" + err.message});
                 }
             }, rInfo.second_send_img2_after_start * 1000);    
         }
