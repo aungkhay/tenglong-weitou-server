@@ -30,17 +30,18 @@ function setup(send) {
 }
 const success = () => ({ data: { data: { msgId: '676216923775565801' } } });
 
-test('send_index stop request skips image upload when the round is already stopped', async () => {
+test('send_index can send multiple stop images even when the round is already stopped', async () => {
     for (const stopped of [{ gameState: 2 }, { gameState: '2' }, { gameState: 6 },
         { gameState: 3 }, { gameState: 5 }, { gameState: 0 }, { isCurRoundStopBet: true }]) {
         const { room, calls, run } = setup(success);
         Object.assign(room.roomInfo, stopped, { lastStopMsgId: '123' });
         const result = await run();
         assert.equal(result.code, '90');
-        assert.equal(result.data.skipped, true);
-        assert.equal(result.data.msgId, '123');
-        assert.equal(calls.length, 0);
-        assert.equal(room.roomInfo.lastStopMsgId, '123');
+        assert.equal(result.data.skipped, undefined);
+        assert.equal(result.data.msgId, '676216923775565801');
+        assert.equal(calls.length, 1);
+        assert.equal((await run()).code, '90');
+        assert.equal(calls.length, 2);
     }
 });
 

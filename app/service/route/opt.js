@@ -212,9 +212,7 @@ router.post('/send_index', async function(req, res) {
             if (!result || String(result.code) !== '90') {
                 return res.send({code:500,msg:result && result.msg || "服务器发送截止图片失败",data:null});
             }
-            return res.send({code:200,msg:result.data && result.data.skipped
-                ? "本局已停止下注，无需重复发送截止图片"
-                : hasSentImage ? "截止图片已确认" : "截止图片发送成功",data:result.data});
+            return res.send({code:200,msg:hasSentImage ? "截止图片已确认" : "截止图片发送成功",data:result.data});
         });
     }
     return res.send({code:200,msg:"上传成功",data:null}); 

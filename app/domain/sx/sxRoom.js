@@ -13,7 +13,6 @@ let settlement = require("./result");
 let config = require('../../../config/config.json');
 const parseResult = require('./parseResult');
 const sendChat = require("../../chat/sendChat");
-const sendStopImageOnce = require('./sendStopImageOnce');
 const moment = require('moment');
 const virtualBetModule = require("./virtualBet");
 const sendToFront = require("./sendToFrontEnd");
@@ -286,7 +285,7 @@ sxRoom.prototype.pauseGame = async function(msg,cb) {
         // 发送截止投注图
         let fileName = rInfo.img2_after_start.split('/').pop();
         let imagePath = config.imgPath[config.imgPath.curSystem] + "/" + fileName;
-        let r = await sendStopImageOnce(this, () => sendChat.sendImageMessage(imagePath,fileName,rInfo.chat_id));
+        let r = await sendChat.sendImageMessage(imagePath,fileName,rInfo.chat_id);
         } finally {
             this._sendingToolStopImage = false;
         }
@@ -977,16 +976,6 @@ sxRoom.prototype.stopBet = async function(msg,cb) {
         return cb(new GMResponse(500,rInfo.rType,rInfo.Id,"截止图片早于本局开始，忽略旧图片通知",null));
     }
     if (msg.server_send_stop_image) {
-        if (rInfo.isCurRoundStopBet || Number(rInfo.gameState) !== GAMESTATE.BET) {
-            console.log('[send_index:2 skipped]', {
-                roomId: rInfo.Id, cc: rInfo.cc, jc: rInfo.jc,
-                gameState: rInfo.gameState, isCurRoundStopBet: rInfo.isCurRoundStopBet
-            });
-            return cb(new GMResponse(CODE.STOP_BET2.code,rInfo.rType,rInfo.Id,"本局已停止下注，无需重复发送截止图片",{
-                state: rInfo.gameState, cc: rInfo.cc, jc: rInfo.jc,
-                msgId: rInfo.lastStopMsgId, skipped: true
-            }));
-        }
         const fail = text => cb(new GMResponse(500,rInfo.rType,rInfo.Id,text,null));
         if (this._sendingToolStopImage) return fail("截止图片正在发送，请稍后确认");
         const chatId = String(msg.chat_id || rInfo.chat_id || '').trim();
