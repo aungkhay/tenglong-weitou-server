@@ -442,6 +442,7 @@ sxRoom.prototype.startBet = async function(){                                   
     rInfo.isEditShoeRound = false
     rInfo.lastStopMsgId =  null;
     rInfo.isCurRoundStopBet = false;
+    rInfo.manualStopImageSent = false;
 
     // 如果是空局，直接进入停止下注状态，不发图片了
     rInfo.gameState = rInfo.isEmptyGame ? GAMESTATE.PAUSE : GAMESTATE.BET;
@@ -508,7 +509,7 @@ sxRoom.prototype.doAutoSendAfterStartImage = async function(){
             const thisJc = bettingRound();
             const isCurrentBet = () => self.roomInfo === rInfo && self._autoImageSession === autoImageSession &&
                 rInfo.cc === thisCc && bettingRound() === thisJc &&
-                !rInfo.isCurRoundStopBet &&
+                !rInfo.isCurRoundStopBet && !rInfo.manualStopImageSent &&
                 !rInfo.hztp && !rInfo.isEmptyGame && rInfo.gameState == GAMESTATE.BET;
             this._autoStopImageTimer = setTimeout(async () => {
                 console.log("自动发送停止投注时的状态：",rInfo.gameState);
@@ -1011,6 +1012,11 @@ sxRoom.prototype.stopBet = async function(msg,cb) {
         }
     }
     console.log("本局手动停止下注:sxRoom stopBet",rInfo.cc,rInfo.jc,msg.msgId);
+    if (msg.server_send_stop_image || msg.tool_uploaded_stop_image) {
+        // 只禁止本局后续自动图2，手动发送仍可重复；新一局 startBet 时重置。
+        rInfo.manualStopImageSent = true;
+        this.cancelAutoStopImage();
+    }
     this.updateLastStopMsgId(msg.msgId);
 
     this.doStopBet();

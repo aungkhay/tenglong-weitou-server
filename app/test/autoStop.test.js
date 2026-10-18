@@ -82,6 +82,32 @@ test('manual stop in flight prevents automatic image 2 from sending', async () =
     assert.equal(room._sendingToolStopImage, false);
 });
 
+test('successful send_index suppresses rearmed auto image 2 but permits another manual send', async () => {
+    const { room, timers, uploads } = setup();
+    await room.doAutoSendAfterStartImage();
+    const manual = () => new Promise(resolve => room.stopBet({ server_send_stop_image: true }, resolve));
+    assert.equal((await manual()).code, '90');
+    assert.equal(room.roomInfo.manualStopImageSent, true);
+    assert.equal(timers[0].cancelled, true);
+    room.roomInfo.gameState = 1;
+    room.roomInfo.isCurRoundStopBet = false;
+    await room.doAutoSendAfterStartImage();
+    await timers[1].fn();
+    assert.equal(uploads.length, 1);
+    assert.equal((await manual()).code, '90');
+    assert.equal(uploads.length, 2);
+});
+
+test('send_index uploaded-image notification suppresses auto image 2 too', async () => {
+    const { room, timers, uploads } = setup();
+    await room.doAutoSendAfterStartImage();
+    await new Promise(resolve => room.stopBet({ tool_uploaded_stop_image: true, msgId: '123' }, resolve));
+    assert.equal(room.roomInfo.manualStopImageSent, true);
+    assert.equal(timers[0].cancelled, true);
+    await timers[0].fn();
+    assert.equal(uploads.length, 0);
+});
+
 test('automatic stop in flight prevents manual duplicate and releases guard on completion', async () => {
     let finish;
     const { room, timers, uploads } = setup(() => new Promise(resolve => { finish = resolve; }));
