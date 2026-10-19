@@ -55,11 +55,29 @@ async function notify(msg, action) {
         if (!msg.group_nickname) return false;
         const rows = await sql().query('bjl', 'SELECT telegram_token, telegram_chat_id FROM telegram_notification_setup WHERE group_nickname = ?', [msg.group_nickname]);
         if (!rows.length) return false;
+        const icon = action.includes('撤销') ? '↩️' : action.includes('下分') ? '🔴' : '🟢';
+        const score = Math.abs(Number(msg.option_score));
+        const amount = Number.isFinite(score)
+            ? score.toLocaleString('en-US', { maximumFractionDigits: 20 }) : '—';
+        const time = new Intl.DateTimeFormat('sv-SE', {
+            timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit',
+            hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23'
+        }).format(new Date());
         await call(rows[0].telegram_token, 'sendMessage', {
             chat_id: rows[0].telegram_chat_id,
-            text: [`群：${msg.group_nickname}`, `玩家：${msg.player_name}`, `操作：${action}`,
-                `类型：${msg.option_type || action}`, `分数：${Math.abs(Number(msg.option_score))}`,
-                `操作员：${msg.userName || ''}`, `时间：${new Date().toISOString()}`].join('\n')
+            text: [
+                `${icon} ${action}成功`,
+                '━━━━━━━━━━━━━━━━',
+                `💰 分数：${amount} 分`,
+                '',
+                `🏷 业务群：${msg.group_nickname}`,
+                `👤 玩家：${msg.player_name || '—'}`,
+                `📋 类型：${msg.option_type || action}`,
+                '',
+                `👨‍💼 操作员：${msg.userName || '—'}`,
+                `🕒 ${time}（北京时间）`,
+                '━━━━━━━━━━━━━━━━'
+            ].join('\n')
         });
         return true;
     } catch (err) {
