@@ -11,7 +11,7 @@ function load({ updates = [], fail = false, rows = [] } = {}) {
             if (name === 'axios') return { post: async (url, body) => {
                 calls.push({ url, body });
                 if (fail) throw new Error('secret token in URL');
-                return { data: { ok: true, result: url.endsWith('getUpdates') ? updates : { id: -123 } } };
+                return { data: { ok: true, result: url.endsWith('getUpdates') ? updates : { id: body.chat_id || -123 } } };
             } };
             return { app: { get: () => ({ query: async (db, sql, args) => {
                 queries.push({ sql, args }); return rows;
@@ -59,12 +59,25 @@ test('setup POST route accepts plain and wrapped request bodies', async () => {
     }
 });
 
-test('setup resolves exact group title and persists without returning token', async () => {
-    const { api, queries } = load({ updates: [{ message: { chat: { title: config.group_nickname, id: -123 } } }] });
+test('setup resolves a unique Telegram group independently of business group name', async () => {
+    const { api, queries } = load({ updates: [{ message: { chat: { title: 'Telegram notifications', id: -123 } } }] });
     const result = await api.setup(config);
     assert.equal(result.telegram_chat_id, '-123');
     assert.equal(result.telegram_token, undefined);
     assert.equal(queries[1].args[1], config.telegram_token);
+});
+test('repeated private /start updates resolve the user chat without an explicit ID', async () => {
+    const updates = [178199374, 178199375].map(update_id => ({ update_id,
+        message: { chat: { id: 7368532900, type: 'private', first_name: 'Knox' }, text: '/start' }
+    }));
+    for (const group_nickname of ['辉煌三台', 'Another business group']) {
+        const { api, calls, queries } = load({ updates });
+        const result = await api.setup({ ...config, group_nickname });
+        assert.equal(result.telegram_chat_id, '7368532900');
+        assert.equal(queries[1].args[0], group_nickname);
+        assert.equal(queries[1].args[2], '7368532900');
+        assert.equal(calls.find(c => c.url.endsWith('getChat')).body.chat_id, '7368532900');
+    }
 });
 test('explicit chat ID skips update discovery', async () => {
     const { api, calls } = load();

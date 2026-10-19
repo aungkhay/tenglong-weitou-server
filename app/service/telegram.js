@@ -21,15 +21,18 @@ async function setup(msg) {
     }
     await call(token, 'getMe', {});
     let chatId = msg.telegram_chat_id;
-    if (chatId === undefined || chatId === '') {
+    if (chatId === undefined || chatId === null || chatId === '') {
         const updates = await call(token, 'getUpdates', { limit: 100, timeout: 0 });
         const chats = new Map();
         for (const update of updates) {
             const event = update.message || update.channel_post || update.my_chat_member;
             const chat = event && event.chat;
-            if (chat && chat.title === group) chats.set(String(chat.id), chat);
+            // Business group names are dynamic and unrelated to Telegram titles.
+            // Repeated updates from one private/group chat represent one destination.
+            if (chat && chat.id !== undefined) chats.set(String(chat.id), chat);
         }
-        if (chats.size !== 1) throw new Error('无法唯一匹配 Telegram 群，请传入 telegram_chat_id，或将机器人加入同名群并发送 /start 后重试');
+        if (chats.size === 0) throw new Error('未找到 Telegram 聊天，请先私聊机器人发送 /start 后重试，或传入 telegram_chat_id');
+        if (chats.size > 1) throw new Error('找到多个 Telegram 聊天，请传入 telegram_chat_id 指定通知接收位置');
         chatId = [...chats.keys()][0];
     }
     if (!/^-?\d+$|^@[A-Za-z0-9_]+$/.test(String(chatId))) throw new Error('telegram_chat_id 格式不正确');

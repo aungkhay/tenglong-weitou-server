@@ -10,11 +10,13 @@
 }
 ```
 
-支持直接 body 或 `{ "data": { ... } }`。机器人需要加入目标群并有发消息权限。
-`telegram_chat_id` 可省略，此时从 getUpdates 最近 100 条更新中匹配群标题与
-`group_nickname` 完全一致的唯一聊天。先在同名群向机器人发送 `/start`。
-若机器人使用 webhook、更新已被其他消费者读取、群名不同或重名，请显式传 chat ID。
-业务群昵称用于匹配通知配置，不必与 Telegram 群名一致（显式指定 chat ID 时）。
+支持直接 body 或 `{ "data": { ... } }`。支持私聊或群聊；群聊时机器人需有发消息权限。
+`telegram_chat_id` 可省略，此时从 getUpdates 最近 100 条更新中提取唯一聊天 ID，
+不使用业务群名匹配 Telegram 群名。同一聊天的多条更新会去重。
+先私聊机器人发送 `/start`，再提交原来的配置请求即可自动识别私聊 ID。
+若发现多个不同聊天，不会猜测接收者，需显式传 chat ID。
+若机器人使用 webhook 或更新已被其他消费者读取，也请显式传 chat ID。
+业务群昵称仅用于匹配通知配置，可以动态变化；每个业务群需分别配置。
 
 首次配置自动创建 MySQL 表 `telegram_notification_setup`，数据库账号需要 CREATE 权限。
 同一业务群重复配置覆盖原 token 和目标 chat ID；响应不包含 token。
