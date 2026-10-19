@@ -97,7 +97,7 @@ sequenceDiagram
     manager->>room: doBet(msg, cb)
     room->>bet: doBet(msg, roomInfo, ...)
     bet->>parser: parseBetStrToArray(msg.bet)
-    parser-->>bet: Internal type 小老虎, amount 100
+    parser-->>bet: Internal type 幸运六, amount 100
     bet->>bet: Store in tempBetCache
 ```
 
@@ -142,7 +142,7 @@ The current endpoint expects `msg` as a **JSON string**. It checks the configure
 The parser returns:
 
 ```js
-[{ type: "小老虎", amount: 100 }]
+[{ type: "幸运六", amount: 100 }]
 ```
 
 That internal name maps to database field `l`. Following the lucky-six update, settlement pays this field on both two-card and three-card banker-six outcomes. See `RULE_AND_CAL_METHOD.md` for the detailed calculation rules.

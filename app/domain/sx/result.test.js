@@ -47,7 +47,7 @@ assert.strictEqual(
     result.do_settlement_jc_bjl(1 | 64, parameterSetup, bet({ k: 100 })).t_yl,
     -2000
 );
-// 幸运六复用 l 字段，三张庄六点也中奖；不能只按原小老虎结算。
+// 幸运六复用 l 字段，三张庄六点也中奖；不能只按原幸运六结算。
 assert.strictEqual(
     result.do_settlement_jc_bjl(1 | 64, parameterSetup, bet({ l: 100 })).t_yl,
     -2000

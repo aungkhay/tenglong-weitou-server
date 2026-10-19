@@ -311,7 +311,7 @@ router.post('/edit_bet_data', async function(req, res) {
         h: '和',
         zd: '庄对',
         xd: '闲对',
-        l: '小老虎',
+        l: '幸运六',
         k: '大老虎',
         m: '完美',
         q: '幸运七'

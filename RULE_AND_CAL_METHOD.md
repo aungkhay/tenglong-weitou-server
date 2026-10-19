@@ -39,9 +39,9 @@ English codes are case-insensitive. Amount-first input such as `100x` and `100�
 
 ### Internal naming of 幸运六
 
-`幸运六100` currently parses to `{ type: "小老虎", amount: 100 }` for compatibility with existing bet processing and database mapping. The field is still `l`, but settlement now treats it as 幸运六, winning on either two-card or three-card banker six.
+`幸运六100` currently parses to `{ type: "幸运六", amount: 100 }` for compatibility with existing bet processing and database mapping. The field is still `l`, but settlement now treats it as 幸运六, winning on either two-card or three-card banker six.
 
-The current Chinese input alias is `幸运六`; `小老虎` is not listed as an ordinary input alias in the current parser. Historical `l` records have no separate marker distinguishing old 小老虎 from new 幸运六. Re-settling those records uses the new rule.
+The Chinese input alias and internal type are both `幸运六`. Historical `l` records have no separate marker distinguishing the former two-card-only rule from the current rule. Re-settling those records uses the current rule.
 
 ## 2. Combination bets
 
@@ -99,7 +99,7 @@ The calculation function uses the same R for each separate all-in item in one ar
 | --- | --- | --- |
 | Banker / player | `pb_max_limit` | `pb_min_limit` |
 | Tie / either pair | `sanbao_max_limit` | `sanbao_min_limit` |
-| 幸运六 (internal 小老虎) | `lucky6_2_max_limit` | `lucky6_2_min_limit` |
+| 幸运六 | `lucky6_2_max_limit` | `lucky6_2_min_limit` |
 | 大老虎 | `lucky6_3_max_limit` | `lucky6_3_min_limit` |
 | 幸运七 | `lucky7_max_limit` | `lucky7_min_limit` |
 | 完美 | `perfect_max_limit` | `perfect_min_limit` |
@@ -212,7 +212,7 @@ Thus a lucky-six player profit of +2,000 appears as platform profit -2,000.
 
 ## 9. Implementation limits to keep in mind
 
-- The `l` field now covers both six results. It cannot simultaneously represent a separate two-card-only 小老虎 bet without additional storage/type changes.
+- The `l` field now covers both six results. It cannot simultaneously represent a separate two-card-only bet without additional storage/type changes.
 - Lucky-six profit is rounded per item in both player and accounting settlement. Other accounting branches mostly retain fractional returns until the final aggregate `floor`; fractional odds can therefore expose differences from per-item player rounding.
 - Player settlement uses zero calculated category profit as a loss fallback. A winning bet whose profit rounds to zero can consequently have an incorrect category profit label, even though the return includes its stake. Use positive, appropriate odds and review this edge case before supporting very small fractional payouts.
 - If both six flags are supplied, the lucky-six branch chooses two-card odds. Such a contradictory result should be corrected at the feed/source.

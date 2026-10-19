@@ -33,7 +33,7 @@ vm.runInNewContext(fs.readFileSync(require.resolve('./result'), 'utf8') + `
 
 async function run() {
     const parsed = parser.parseBetStrToArray('幸运六100');
-    assert.deepEqual(parsed, [{ type: '小老虎', amount: 100 }]);
+    assert.deepEqual(parsed, [{ type: '幸运六', amount: 100 }]);
     const parameters = { lucky_6_2_odds: 1200, lucky_6_3_odds: 2000, tie_odds: 800 };
     const result = sandbox.module.exports;
     for (const [code, returned, profit] of [

@@ -14,7 +14,7 @@ const BET_TYPE_FIELDS = {
     'zd': 'zd',
     '闲对': 'xd',
     'xd': 'xd',
-    '小老虎': 'l',
+    '幸运六': 'l',
     'l': 'l',
     '大老虎': 'k',
     'k': 'k',

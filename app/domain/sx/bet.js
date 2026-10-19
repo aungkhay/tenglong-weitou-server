@@ -1977,7 +1977,7 @@ module.exports = {
             if (e.type === "闲梭") { out.push({ ...e, type: "闲", amount: remain }); continue; }
             if (e.type === "和梭") { out.push({ ...e, type: "和", amount: remain }); continue; }
             if (e.type === "大老虎梭") { out.push({ ...e, type: "大老虎", amount: remain }); continue; }
-            if (e.type === "小老虎梭") { out.push({ ...e, type: "小老虎", amount: remain }); continue; }
+            if (e.type === "幸运六梭") { out.push({ ...e, type: "幸运六", amount: remain }); continue; }
             if (e.type === "完美梭") { out.push({ ...e, type: "完美", amount: remain }); continue; }
             if (e.type === "幸运七梭") { out.push({ ...e, type: "幸运七", amount: remain }); continue; }
             if (e.type === "庄对梭") { out.push({ ...e, type: "庄对", amount: Math.floor(remain) }); continue; }
@@ -1995,7 +1995,7 @@ module.exports = {
             if (e.type === "老虎梭") {
                 const half = Math.floor(remain / 2);
                 if (!cancelledKeys.has('l')) {
-                    out.push({ ...e, type: "小老虎", amount: half });
+                    out.push({ ...e, type: "幸运六", amount: half });
                 }
                 if (!cancelledKeys.has('k')) {
                     out.push({ ...e, type: "大老虎", amount: remain - half });
@@ -2063,7 +2063,7 @@ module.exports = {
                         return true;
                     }
                 }
-                if (element.type == "小老虎") {
+                if (element.type == "幸运六") {
                     if (element.amount > r.lucky6_2_max_limit) {
                         return true;
                     }
@@ -2121,7 +2121,7 @@ module.exports = {
                         return true;
                     }
                 }
-                if (element.type == "小老虎") {
+                if (element.type == "幸运六") {
                     if (element.amount < r.lucky6_2_min_limit) {
                         return true;
                     }
@@ -2207,7 +2207,7 @@ function normalizeMainType(type) {
         // 闲/闲梭
         'x': 'x', 'xs': 'x', '闲': 'x', '闲梭': 'x',
         // 小/大老虎
-        'l': 'l', 'ls': 'l', '小老虎': 'l', '小老虎梭': 'l',
+        'l': 'l', 'ls': 'l', '幸运六': 'l', '幸运六梭': 'l',
         'k': 'k', 'ks': 'k', '大老虎': 'k', '大老虎梭': 'k', '老虎': 'n', '老虎梭': 'n',
         // 对子类
         'zd': 'zd', 'zds': 'zd', '庄对': 'zd', '庄对梭': 'zd',

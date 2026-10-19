@@ -386,7 +386,7 @@ systemDao.parameterSetup = async function (msg) {
     if (![smallTigerMin, smallTigerMax, bigTigerMin, bigTigerMax].every(Number.isFinite) ||
         smallTigerMin < 0 || bigTigerMin < 0 ||
         smallTigerMax < smallTigerMin || bigTigerMax < bigTigerMin) {
-      throw new Error("小老虎或大老虎限红设置不正确");
+      throw new Error("幸运六或大老虎限红设置不正确");
     }
 
     if (res.length > 0) {

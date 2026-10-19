@@ -14,9 +14,15 @@ function setup(send = async () => ({ data: { data: { msgId: '123' } } })) {
     const stopEnd = source.indexOf('sxRoom.prototype.pushResult =', stopBegin);
     const pauseBegin = source.indexOf('sxRoom.prototype.pauseGame =');
     const pauseEnd = source.indexOf('\nsxRoom.prototype.', pauseBegin + 1);
-    vm.runInNewContext(source.slice(begin, end) + source.slice(stopBegin, stopEnd) + source.slice(pauseBegin, pauseEnd), {
+    const startBegin = source.indexOf('sxRoom.prototype.doNextJc =');
+    const startEnd = source.indexOf('sxRoom.prototype.doAutoSendStartImg =', startBegin);
+    vm.runInNewContext(source.slice(begin, end) + source.slice(stopBegin, stopEnd) + source.slice(pauseBegin, pauseEnd) + source.slice(startBegin, startEnd), {
         sxRoom: Room, GAMESTATE: { BET: 1, STOP_BET: 2, PAUSE: 3 },
-        GMResponse: require('../domain/GMResponse'), CODE: { STOP_BET2: { code: '90', msg: '停止下注' } },
+        GMResponse: require('../domain/GMResponse'), CODE: { STOP_BET2: { code: '90', msg: '停止下注' }, START_BET: { code: '03', msg: '开始下注' } },
+        systemDao: { getGroupPullDataSetup: async () => ({ data: [{ statistics_date: '2026-10-19' }] }),
+            getParameter: async () => ({ data: [{}] }) },
+        moment: () => ({ format: () => '2026-10-19' }),
+        userDao: { updateCcAndRoad() {} }, bet: { clearBetCache() {} },
         config: { imgPath: { curSystem: 'test', test: '/images' } },
         setTimeout: (fn, delay) => timers.push({ fn, delay }),
         clearTimeout: id => { timers[id - 1].cancelled = true; },
@@ -33,6 +39,7 @@ function setup(send = async () => ({ data: { data: { msgId: '123' } } })) {
     room.doStopBet = async () => { room.cancelAutoStopImage(); room.roomInfo.gameState = 2; };
     room.setStateRedis = () => {};
     room.updateGame = () => {};
+    room.resetResult = room.insertGame = room.virtualBet = room.pushGameInfoToClient = () => {};
     return { room, timers, notices, uploads };
 }
 
@@ -45,6 +52,29 @@ test('quick-mode auto stop survives settlement of the previous round', async () 
     assert.equal(uploads.length, 1);
     assert.equal(room.roomInfo.gameState, 2);
     assert.equal(room.roomInfo.lastStopMsgId, '123');
+});
+
+test('duplicate index=1 after manual stop cannot restart the auto image timer; a new start image can', async () => {
+    const { room, timers, uploads } = setup();
+    room.roomInfo.quick_mode = 0;
+    room.roomInfo.startMsgId = '10';
+    await room.startBet();
+    await room.doAutoSendAfterStartImage();
+    await new Promise(resolve => room.stopBet({ server_send_stop_image: true }, resolve));
+    const start = msgId => new Promise(resolve => room.doNextJc({ tool_upload_start: true, msgId }, 1, resolve));
+    // Settlement may clear startMsgId, but must not erase the identity of the last start.
+    room.roomInfo.startMsgId = null;
+    const duplicate = await start('10');
+    assert.equal(duplicate.data.skipped, true);
+    assert.equal(room.roomInfo.manualStopImageSent, true);
+    assert.equal(room.roomInfo.gameState, 2);
+    assert.equal(timers.length, 1);
+    await timers[0].fn();
+    assert.equal(uploads.length, 1);
+    assert.equal((await start('20')).code, '03');
+    assert.equal(room.roomInfo.manualStopImageSent, false);
+    await timers[1].fn();
+    assert.equal(uploads.length, 2);
 });
 
 test('pause upload cancels the image 2 timer and blocks an already queued callback', async () => {

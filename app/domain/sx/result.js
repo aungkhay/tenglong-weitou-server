@@ -130,7 +130,7 @@ let settlement_bjl = async (msg,rInfo,res) => {
     if(isBankPair)msg.strPai += "庄对 "
     if(isPlayerPair)msg.strPai += "闲对 "
     if(isPerfect)msg.strPai += "完美 "
-    if(isSmallTiger)msg.strPai += "小老虎 "
+    if(isSmallTiger)msg.strPai += "幸运六 "
     if(isBigTiger)msg.strPai += "大老虎 "
     if(isLucky7_4 || isLucky7_5 || isLucky7_6)msg.strPai += "幸运7 "
 

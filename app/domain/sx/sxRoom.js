@@ -344,6 +344,16 @@ sxRoom.prototype.nextJc = async function(msg,cb) {
 sxRoom.prototype.doNextJc = async function(msg,n,cb){   // n: 1 手动开始，2 自动开始 
     let rInfo = this.roomInfo;
     let self = this;
+    // 同一张开始图的重复通知不能重新开局，否则会清除手动截止标记并重启图2计时。
+    const uploadedStartId = String(msg.msgId || '').trim();
+    const lastStartedId = String(rInfo.lastStartedMsgId || rInfo.startMsgId || '').trim();
+    if (msg.tool_upload_start && /^\d+$/.test(uploadedStartId) &&
+        BigInt(uploadedStartId) > 0n && uploadedStartId === lastStartedId) {
+        console.log('[忽略重复开始图片通知]', {roomId: rInfo.Id, msgId: uploadedStartId});
+        return cb(new GMResponse(CODE.START_BET.code,rInfo.rType,rInfo.Id,CODE.START_BET.msg,{
+            gameId: msg.gameId, jc: rInfo.jc, cc: rInfo.cc, skipped: true
+        }));
+    }
 
     // 空局就是为了快速开奖，不给下注，增加一个isEmptyGame字段，来标识是否是空局，空局就不发图片了
     rInfo.isEmptyGame = msg.is_empty ? true : false;
@@ -443,6 +453,7 @@ sxRoom.prototype.startBet = async function(){                                   
     rInfo.lastStopMsgId =  null;
     rInfo.isCurRoundStopBet = false;
     rInfo.manualStopImageSent = false;
+    rInfo.lastStartedMsgId = rInfo.startMsgId || null;
 
     // 如果是空局，直接进入停止下注状态，不发图片了
     rInfo.gameState = rInfo.isEmptyGame ? GAMESTATE.PAUSE : GAMESTATE.BET;

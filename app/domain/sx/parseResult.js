@@ -223,7 +223,7 @@ module.exports = {
 
         // 仅兼容已知普通玩法的“类型+w/万+数字”，例如 zw1、xdw2、bb万1。
         // 不使用泛化字母匹配，避免改变梭哈、撤注、改单及未知指令的含义。
-        const typeBeforeWanPattern = /(小老虎|幸运六|大老虎|幸运七|庄对|闲对|对子|三宝|四宝|Z对|X对|ZD|XD|DZ|SB|BB|庄|和|闲|对|Z|H|X|D|L|K|Q|M)[wW万](\d+)/gi;
+        const typeBeforeWanPattern = /(幸运六|大老虎|幸运七|庄对|闲对|对子|三宝|四宝|Z对|X对|ZD|XD|DZ|SB|BB|庄|和|闲|对|Z|H|X|D|L|K|Q|M)[wW万](\d+)/gi;
         s = s.replace(typeBeforeWanPattern, (match, rawType, amount) => {
             return rawType + String(Number(amount) * 10000);
         });
@@ -233,9 +233,9 @@ module.exports = {
             z: "庄", x: "闲", h: "和",
             zd: "庄对", xd: "闲对",
             pair: "对子",
-            // 幸运六输入统一为 bet.js 和 DAO 使用的小老虎类型。
-            l: "小老虎", k: "大老虎",
-            ls: "小老虎梭", ks: "大老虎梭", n: "老虎梭",
+            // 幸运六输入统一为 bet.js 和 DAO 使用的幸运六类型。
+            l: "幸运六", k: "大老虎",
+            ls: "幸运六梭", ks: "大老虎梭", n: "老虎梭",
             zds: "庄对梭", xds: "闲对梭",
             q: "幸运七", m: "完美",
             qs: "幸运七梭", ms: "完美梭",
@@ -330,7 +330,7 @@ module.exports = {
         // 梭哈类型和普通类型之间的格式，将其规范为“zs x 100”。
         const allInTypes = new Set(["zs", "xs", "hs", "ls", "ks", "qs", "ms", "zds", "xds", "ds", "sbs", "bbs", "n"]);
         const isAllInToken = (rawToken, mappedType) => {
-            // n/老虎后面可以直接带金额，表示小老虎和大老虎各下注该金额；
+            // n/老虎后面可以直接带金额，表示幸运六和大老虎各下注该金额；
             // 只有 ns、老虎梭等明确梭哈写法才按老虎梭处理。
             const rawUpper = String(rawToken || "").toUpperCase();
             if (mappedType === "n" && (rawUpper === "N" || rawToken === "老虎")) {
