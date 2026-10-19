@@ -48,7 +48,8 @@ mysqlHelper.prototype.query = function(dbname,sql, args) {                      
         }
         pool.getConnection((err, conn) => {
             if (err) {
-                console.error('===============执行Mysql命令时报错: %s================',sql,args, err.stack);
+                  console.error('===============执行Mysql命令时报错: %s================',sql,
+                      /telegram_notification_setup/i.test(sql) ? '[REDACTED]' : args, err.stack);
                 reject(err);
             } else {
                 conn.query(sql, args, (err, data) => {

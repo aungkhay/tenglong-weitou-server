@@ -7,6 +7,18 @@ let userDao = require('../../../dao/userDao');
 const md5 = require('js-md5');
 module.exports = router;
 
+router.post('/telegram_token_setup', async function(req, res) {
+    try {
+        const msg = req.body.data || req.body;
+        const data = await require('../../telegram').setup(msg);
+        return res.send({ code: 200, msg: 'Telegram 配置成功', data });
+    } catch (err) {
+        // Do not serialize database or HTTP errors containing credentials.
+        const message = err.code ? 'Telegram 配置保存失败' : err.message;
+        return res.send({ code: 500, msg: message, data: null });
+    }
+});
+
 router.post('/edit_pw', async function(req, res) {                                                // 客服发聊天过来
     try {
         let msg = req.body.data?req.body.data:req.body;

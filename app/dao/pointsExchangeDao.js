@@ -446,6 +446,7 @@ dao.singlePlayerAllGroupExchange = async function (msg) {
         const batchId = "B" + uuidv4();
         const now = new Date();
 
+        const telegramEvents = [];
         let sumPoints = 0;
         let sumScore = 0;
 
@@ -474,6 +475,7 @@ dao.singlePlayerAllGroupExchange = async function (msg) {
                     : groupDefaultRatio;
 
             const resultScore = points * ratio;
+            telegramEvents.push({ ...msg, group_nickname: item.group_nickname, player_name: user.username, option_score: resultScore, option_type: '积分充值' });
 
             sqlParamsEntity.push(
                 mysql._getNewSqlParamEntity(
@@ -608,6 +610,7 @@ dao.singlePlayerAllGroupExchange = async function (msg) {
             };
         }
 
+        for (const event of telegramEvents) await require('../service/telegram').notify(event, '兑换积分上分');
         sendToGameFront("all#", { type: "9" });
 
         sendToClientFront("all#", {
@@ -707,6 +710,7 @@ dao.singleGroupExchange = async function (msg) {
         sendToGameFront("all#", { type: "9" });
         for (let item of r) {
             let ye = (Number(playerMap[item.player_name]) + Number(add_score[item.player_name]));
+            await require('../service/telegram').notify({ ...msg, group_nickname: item.group_nickname || msg.group_nickname, player_name: item.player_name, option_score: add_score[item.player_name], option_type: '积分充值' }, '兑换积分上分');
             sendToClientFront("all#", { type: 1, msg: item.player_name + "兑换积分上分" + add_score[item.player_name] + "分,成功, 余额: " + ye });
         }
     }
@@ -770,6 +774,7 @@ dao.allGroupExchange = async function (msg) {
         sendToGameFront("all#", { type: "9" });
         for (let item of r) {
             let ye = (Number(playerMap[item.player_name]) + Number(add_score[item.player_name]));
+            await require('../service/telegram').notify({ ...msg, group_nickname: item.group_nickname || msg.group_nickname, player_name: item.player_name, option_score: add_score[item.player_name], option_type: '积分充值' }, '兑换积分上分');
             sendToClientFront("all#", { type: 1, msg: item.player_name + "兑换积分上分" + add_score[item.player_name] + "分,成功, 余额: " + ye });
         }
     }
@@ -831,8 +836,9 @@ dao.cancelExchange = async function (msg) {
     let res = await mysql.tranExecSync("bjl", sqlParamsEntity);
     if (res) {
         sendToGameFront("all#", { type: "9" });
-        for (let item of r) {
+        for (let item of row) {
             let ye = (Number(playerMap[item.player_name]) - Number(add_score[item.player_name]));
+            await require('../service/telegram').notify({ ...msg, group_nickname: item.group_nickname || msg.group_nickname, player_name: item.player_name, option_score: add_score[item.player_name], option_type: '积分充值' }, '撤销兑换积分下分');
             sendToClientFront("all#", { type: 1, msg: item.player_name + "撤销兑换积分下分" + add_score[item.player_name] + "分,成功, 余额: " + ye });
         }
     }
@@ -1307,6 +1313,7 @@ dao.cancelExchangeById = async function (msg) {
     let res = await mysql.tranExecSync("bjl", sqlParamsEntity);
     if (res) {
         sendToGameFront("all#", { type: "9" });
+        await require('../service/telegram').notify({ ...msg, group_nickname: record.group_nickname, player_name: record.playername, option_score: scoreBack, option_type: '积分充值' }, '撤销积分兑换下分');
         let ye = Number(currentScore) - scoreBack;
         sendToClientFront("all#", { type: 1, msg: `${record.playername} 撤销积分兑换下分 ${scoreBack} 分，成功，余额: ${ye}` });
     }

@@ -97,6 +97,7 @@ async function tokenMiddleware(req, res, next) {
 
     // 打印日志（生产环境高并发时建议关闭，很吃磁盘I/O和网络响应）
     const hiddenPaths = [
+        "/telegram_token_setup",
         "/get_profit_score",
         "/get_player",
         "/get_score_option_record"

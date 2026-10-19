@@ -190,6 +190,7 @@ playerOptionDao.add_score = async function(msg){
             }
         }
         let res = await mysql.tranExecSync("bjl", sqlParamsEntity);
+        if (res) await require('../service/telegram').notify(msg, '上分');
         return { err: null, data: res };
     } catch(err){
         console.error("err:", JSON.stringify(err));
@@ -240,6 +241,7 @@ playerOptionDao.subtract_score = async function(msg){
             }
         }
         let res = await mysql.tranExecSync("bjl", sqlParamsEntity);
+        if (res) await require('../service/telegram').notify(msg, '下分');
         return { err: null, data: res };
     } catch(err){
         console.error("err:", JSON.stringify(err));
@@ -526,6 +528,7 @@ playerOptionDao.undoOptionScore = async function(msg){
         }
 
         let res = await mysql.tranExecSync("bjl", sqlParamsEntity);
+        if (res) await require('../service/telegram').notify({ ...msg, group_nickname: msg.row.group_nickname || msg.group_nickname }, '撤销上下分');
         return { err: null, data: res };
     } catch(err){
         console.error("err:", JSON.stringify(err));
