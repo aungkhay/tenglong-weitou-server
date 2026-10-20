@@ -100,6 +100,20 @@ test('unconfigured group sends nothing; configured group sends plain score detai
     assert.match(configured.calls[0].body.text, /下分/);
     assert.equal(configured.calls[0].body.chat_id, '-123');
 });
+test('HTML notification escapes dynamic names and preserves readable amounts', async () => {
+    const { api, calls } = load({ rows: [{ ...config, telegram_chat_id: '-123' }] });
+    await api.notify({ ...config, group_nickname: 'A&B', player_name: '<b>会员</b>',
+        userName: '<admin>', option_type: '现金&充值', option_score: 12345.67 }, '上分');
+    const body = calls[0].body;
+    assert.equal(body.parse_mode, 'HTML');
+    assert.match(body.text, /<b>12,345.67 分<\/b>/);
+    assert.match(body.text, /&lt;b&gt;会员&lt;\/b&gt;/);
+    assert.match(body.text, /A&amp;B/);
+    assert.match(body.text, /&lt;admin&gt;/);
+    assert.match(body.text, /现金&amp;充值/);
+    assert.doesNotMatch(body.text, /<admin>/);
+});
+
 test('Telegram failures are isolated and do not expose credentials', async () => {
     const { api } = load({ fail: true, rows: [{ ...config, telegram_chat_id: '-123' }] });
     await assert.rejects(api.setup(config), err => !err.message.includes('secret'));

@@ -1,6 +1,7 @@
 const axios = require('axios');
 const pomelo = require('pomelo');
 const sql = () => pomelo.app.get('sqlHelper');
+const escapeHtml = value => String(value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
 async function call(token, method, body) {
     try {
@@ -55,7 +56,7 @@ async function notify(msg, action) {
         if (!msg.group_nickname) return false;
         const rows = await sql().query('bjl', 'SELECT telegram_token, telegram_chat_id FROM telegram_notification_setup WHERE group_nickname = ?', [msg.group_nickname]);
         if (!rows.length) return false;
-        const icon = action.includes('撤销') ? '↩️' : action.includes('下分') ? '🔴' : '🟢';
+        const icon = action.includes('撤销') ? '↩️' : action.includes('下分') ? '⏬' : '⏫';
         const score = Math.abs(Number(msg.option_score));
         const amount = Number.isFinite(score)
             ? score.toLocaleString('en-US', { maximumFractionDigits: 20 }) : '—';
@@ -65,18 +66,15 @@ async function notify(msg, action) {
         }).format(new Date());
         await call(rows[0].telegram_token, 'sendMessage', {
             chat_id: rows[0].telegram_chat_id,
+            parse_mode: 'HTML',
             text: [
-                `${icon} ${action}成功`,
-                '━━━━━━━━━━━━━━━━',
-                `💰 分数：${amount} 分`,
+                `${icon} <b>${escapeHtml(action)}</b>  ·  已完成`,
                 '',
-                `🏷 业务群：${msg.group_nickname}`,
-                `👤 玩家：${msg.player_name || '—'}`,
-                `📋 类型：${msg.option_type || action}`,
+                `<b>${amount} 分</b>`,
+                `<blockquote>会员:    <b>${escapeHtml(msg.player_name || '—')}</b>\n业务群:    ${escapeHtml(msg.group_nickname)}\n类型:    ${escapeHtml(msg.option_type || action)}</blockquote>`,
                 '',
-                `👨‍💼 操作员：${msg.userName || '—'}`,
-                `🕒 ${time}（北京时间）`,
-                '━━━━━━━━━━━━━━━━'
+                `操作员  ·  ${escapeHtml(msg.userName || '—')}`,
+                `<i>${time} · 北京时间</i>`
             ].join('\n')
         });
         return true;
