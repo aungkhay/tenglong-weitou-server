@@ -13,6 +13,14 @@ const uuidv4 = crypto.randomUUID
     };
 const sendToFront = require("../domain/sx/sendToFrontEnd");
 
+// Historical rows can use their recorded amounts, never today's configured rate.
+function getRecordedExchangeRatio(record) {
+    if (record.exchange_ratio != null) return Number(record.exchange_ratio);
+    if (!['exchange', 'cancel'].includes(record.type) || !Number(record.points_change)) return null;
+    return Math.abs(Number(record.score_change) / Number(record.points_change));
+}
+
+
 dao.getExchangeRate = async function (msg) {
     let sql = "SELECT default_exchange FROM group_parameter_setup WHERE group_nickname = ? LIMIT 1";
     let rows = await mysql.query("bjl", sql, [msg.group_nickname]);
@@ -493,9 +501,10 @@ dao.singlePlayerAllGroupExchange = async function (msg) {
                             operator,
                             exchange_type,
                             exchange_date,
-                            batch_id
+                            batch_id,
+                            exchange_ratio
                         )
-                        VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+                        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
                     `,
                     [
                         item.group_nickname,
@@ -509,7 +518,8 @@ dao.singlePlayerAllGroupExchange = async function (msg) {
                         msg.userName,
                         "按有效流水",
                         msg.statistics_date,
-                        batchId
+                        batchId,
+                        ratio
                     ]
                 )
             );
@@ -528,9 +538,10 @@ dao.singlePlayerAllGroupExchange = async function (msg) {
                             option_time,
                             working_date,
                             optioner,
-                            is_add
+                            is_add,
+                            exchange_ratio
                         )
-                        VALUES (?,?,?,?,?,?,?,?,?,?)
+                        VALUES (?,?,?,?,?,?,?,?,?,?,?)
                     `,
                     [
                         item.group_nickname,
@@ -542,7 +553,8 @@ dao.singlePlayerAllGroupExchange = async function (msg) {
                         now,
                         msg.statistics_date,
                         msg.userName || "大红",
-                        1
+                        1,
+                        ratio
                     ]
                 )
             );
@@ -676,9 +688,9 @@ dao.singleGroupExchange = async function (msg) {
 
         // ✅ points_log 补充 userId
         sqlParamsEntity.push(mysql._getNewSqlParamEntity(
-            `INSERT INTO points_log(group_nickname, userId, player_name, type, points_change, score_change, source_id, stime, operator, exchange_type, exchange_date, batch_id)
-             VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
-            [msg.group_nickname, item.userId, item.player_name, "exchange", -item.points, result_score, uuidv4(), now, msg.userName, "按有效流水", msg.statistics_date, batch_id]
+            `INSERT INTO points_log(group_nickname, userId, player_name, type, points_change, score_change, source_id, stime, operator, exchange_type, exchange_date, batch_id, exchange_ratio)
+             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+            [msg.group_nickname, item.userId, item.player_name, "exchange", -item.points, result_score, uuidv4(), now, msg.userName, "按有效流水", msg.statistics_date, batch_id, ratio]
         ));
 
         // ✅ user 表改用 Id 更新
@@ -689,9 +701,9 @@ dao.singleGroupExchange = async function (msg) {
 
         // ✅ score_operation_record 补充 userId
         sqlParamsEntity.push(mysql._getNewSqlParamEntity(
-            `INSERT INTO score_operation_record(group_nickname, userId, playername, score, before_option_score, option_type, option_time, working_date, optioner, is_add)
-             VALUES (?,?,?,?,?,?,?,?,?,?)`,
-            [msg.group_nickname, item.userId, item.player_name, result_score, playerMap[item.player_name], "积分充值", now, msg.statistics_date, "大红", 1]
+            `INSERT INTO score_operation_record(group_nickname, userId, playername, score, before_option_score, option_type, option_time, working_date, optioner, is_add, exchange_ratio)
+             VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+            [msg.group_nickname, item.userId, item.player_name, result_score, playerMap[item.player_name], "积分充值", now, msg.statistics_date, "大红", 1, ratio]
         ));
 
         arrAddPoint.push({ score: result_score, player_name: item.player_name });
@@ -745,9 +757,9 @@ dao.allGroupExchange = async function (msg) {
 
         // ✅ points_log 补充 userId
         sqlParamsEntity.push(mysql._getNewSqlParamEntity(
-            `INSERT INTO points_log(group_nickname, userId, player_name, type, points_change, score_change, source_id, stime, operator, exchange_type, exchange_date, batch_id)
-             VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
-            [item.group_nickname, item.userId, item.player_name, "exchange", -item.points, result_score, uuidv4(), now, msg.userName, "按有效流水", msg.statistics_date, batch_id]
+            `INSERT INTO points_log(group_nickname, userId, player_name, type, points_change, score_change, source_id, stime, operator, exchange_type, exchange_date, batch_id, exchange_ratio)
+             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+            [item.group_nickname, item.userId, item.player_name, "exchange", -item.points, result_score, uuidv4(), now, msg.userName, "按有效流水", msg.statistics_date, batch_id, ratio]
         ));
 
         // ✅ user 表改用 Id 更新
@@ -758,9 +770,9 @@ dao.allGroupExchange = async function (msg) {
 
         // ✅ score_operation_record 补充 userId
         sqlParamsEntity.push(mysql._getNewSqlParamEntity(
-            `INSERT INTO score_operation_record(group_nickname, userId, playername, score, before_option_score, option_type, option_time, working_date, optioner, is_add)
-             VALUES (?,?,?,?,?,?,?,?,?,?)`,
-            [item.group_nickname, item.userId, item.player_name, result_score, playerMap[item.player_name], "积分充值", now, msg.statistics_date, "大红", 1]
+            `INSERT INTO score_operation_record(group_nickname, userId, playername, score, before_option_score, option_type, option_time, working_date, optioner, is_add, exchange_ratio)
+             VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+            [item.group_nickname, item.userId, item.player_name, result_score, playerMap[item.player_name], "积分充值", now, msg.statistics_date, "大红", 1, ratio]
         ));
     }
 
@@ -804,9 +816,9 @@ dao.cancelExchange = async function (msg) {
 
         // ✅ points_log 撤销日志补充 userId
         sqlParamsEntity.push(mysql._getNewSqlParamEntity(
-            `INSERT INTO points_log(group_nickname, userId, player_name, type, points_change, score_change, source_id, stime, operator, exchange_type, exchange_date, memo, batch_id)
-             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-            [item.group_nickname, item.userId, item.player_name, "cancel", points, -item.score_change, uuidv4(), now, msg.userName, "按有效流水", msg.statistics_date, "撤销操作", batch_id]
+            `INSERT INTO points_log(group_nickname, userId, player_name, type, points_change, score_change, source_id, stime, operator, exchange_type, exchange_date, memo, batch_id, exchange_ratio)
+             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+            [item.group_nickname, item.userId, item.player_name, "cancel", points, -item.score_change, uuidv4(), now, msg.userName, "按有效流水", msg.statistics_date, "撤销操作", batch_id, getRecordedExchangeRatio(item)]
         ));
 
         // ✅ user 表改用 userId 更新
@@ -827,9 +839,9 @@ dao.cancelExchange = async function (msg) {
 
         // ✅ score_operation_record 补充 userId
         sqlParamsEntity.push(mysql._getNewSqlParamEntity(
-            `INSERT INTO score_operation_record(group_nickname, userId, playername, score, before_option_score, option_type, option_time, working_date, optioner, is_add, memo)
-             VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
-            [item.group_nickname, item.userId, item.player_name, item.score_change, playerMap[item.player_name], "积分充值", now, msg.statistics_date, "大红", 1, "积分充值"]
+            `INSERT INTO score_operation_record(group_nickname, userId, playername, score, before_option_score, option_type, option_time, working_date, optioner, is_add, memo, exchange_ratio)
+             VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+            [item.group_nickname, item.userId, item.player_name, item.score_change, playerMap[item.player_name], "积分充值", now, msg.statistics_date, "大红", 1, "积分充值", getRecordedExchangeRatio(item)]
         ));
     }
 
@@ -929,12 +941,14 @@ dao.getExchangeInfo = async function (msg) {
     let list = await mysql.query("bjl", sql, [...args, offset, pageSize]);
     //console.log("sql2:", sql, [...args, offset, pageSize]);
 
+    list.forEach(item => { item.exchange_ratio = getRecordedExchangeRatio(item); });
+
     const summary = { total_count: total, total_points_change: points_change, total_score_change: score_change };
     const summaryRow = {
         Id: null, group_nickname: '', player_name: '合计', type: '',
         points_change, score_change, source_id: null, stime: null,
         operator: null, exchange_type: null, exchange_date: null,
-        batch_id: null, personal_points_redemption_ratio: null
+        batch_id: null, personal_points_redemption_ratio: null, exchange_ratio: null
     };
     const returnedList = Array.isArray(list) ? [...list, summaryRow] : [summaryRow];
     return { err: null, data: { list: returnedList, total, summary, currentPage, pageSize } };
@@ -1285,9 +1299,9 @@ dao.cancelExchangeById = async function (msg) {
 
     // ✅ points_log 撤销日志补充 userId
     sqlParamsEntity.push(mysql._getNewSqlParamEntity(
-        `INSERT INTO points_log(group_nickname, userId, player_name, type, points_change, score_change, source_id, stime, operator, exchange_type, exchange_date, memo, batch_id)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-        [record.group_nickname, record.userId, record.playername, "cancel", points, -scoreBack, uuidv4(), now, msg.userName, "按有效流水", msg.statistics_date, "单条撤销", batch_id]
+        `INSERT INTO points_log(group_nickname, userId, player_name, type, points_change, score_change, source_id, stime, operator, exchange_type, exchange_date, memo, batch_id, exchange_ratio)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        [record.group_nickname, record.userId, record.playername, "cancel", points, -scoreBack, uuidv4(), now, msg.userName, "按有效流水", msg.statistics_date, "单条撤销", batch_id, getRecordedExchangeRatio(pointsLogItem)]
     ));
 
     // ✅ user 表改用 Id 更新

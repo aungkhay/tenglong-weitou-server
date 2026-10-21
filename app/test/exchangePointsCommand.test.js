@@ -133,4 +133,70 @@ test('existing exchange applies group default and positive personal override acr
     const balance = transaction.find(entry => entry.sql.includes('UPDATE user'));
     assert.deepEqual(Array.from(balance.args), [120, 120, 30, 30, 7]);
     assert.ok(transaction.some(entry => entry.sql.includes('UPDATE points_group_user')));
+    for (const table of ['points_log', 'score_operation_record']) {
+        const inserts = transaction.filter(entry => entry.sql.includes('INSERT INTO ' + table));
+        assert.deepEqual(Array.from(inserts, entry => entry.args[entry.args.length - 1]), [2, 5]);
+        for (const entry of inserts) {
+            assert.match(entry.sql, /exchange_ratio/);
+            assert.equal((entry.sql.match(/\?/g) || []).length, entry.args.length);
+        }
+    }
+});
+
+test('exchange history returns saved, zero and legacy effective rates, not current settings', async () => {
+    const dao = load('../dao/pointsExchangeDao.js', {
+        pomelo: { app: { get: () => ({ query: async (db, sql) => {
+            if (sql.includes('COUNT(*)')) return [{ total: 4 }];
+            return [
+                { type: 'exchange', exchange_ratio: '2.500000000000', personal_points_redemption_ratio: 99 },
+                { type: 'exchange', exchange_ratio: '0.000000000000' },
+                { type: 'cancel', exchange_ratio: null, points_change: 10, score_change: -30 },
+                { type: 'reset', exchange_ratio: null, points_change: -10, score_change: 0 }
+            ];
+        } }) } },
+        '../domain/sx/sendToFrontEnd': {}
+    });
+    const result = await dao.getExchangeInfo({});
+    assert.deepEqual(Array.from(result.data.list, item => item.exchange_ratio), [2.5, 0, 3, null, null]);
+});
+
+test('score operation history exposes numeric snapshots and null for unknown rates', async () => {
+    const dao = load('../dao/playerOptionDao.js', {
+        pomelo: { app: { get: () => ({ query: async (db, sql) => {
+            if (sql.includes('COUNT(*)')) return [{ count: 3 }];
+            return [{ exchange_ratio: '2.500000000000' }, { exchange_ratio: '0.000000000000' }, {}];
+        } }) } }
+    });
+    const result = await dao.getScoreOptionRecord({});
+    assert.deepEqual(Array.from(result.data.list, item => item.exchange_ratio), [2.5, 0, null]);
+});
+
+test('group exchanges and batch reversals persist rates in both logs with matching SQL parameters', async () => {
+    for (const method of ['singleGroupExchange', 'allGroupExchange', 'cancelExchange']) {
+        let transaction;
+        const record = { group_nickname: 'A', userId: 7, player_name: '光头强', points: 10,
+            type: 'exchange', points_change: -10, score_change: 25, exchange_ratio: '2.500000000000', batch_id: 'old' };
+        const mysql = {
+            query: async (db, sql) => {
+                if (sql.includes('FROM group_parameter_setup')) return [{ group_nickname: 'A', default_exchange: 2 }];
+                if (sql.includes('FROM finance_personal_setup')) return [{ ...record, username: '光头强', personal_points_redemption_ratio: 2.5 }];
+                if (sql.includes('FROM user')) return [{ username: '光头强', score: 100 }];
+                return [record];
+            },
+            _getNewSqlParamEntity: (sql, args) => ({ sql, args }),
+            tranExecSync: async (db, entries) => { transaction = entries; return true; }
+        };
+        const dao = load('../dao/pointsExchangeDao.js', {
+            pomelo: { app: { get: () => mysql } },
+            '../domain/sx/sendToFrontEnd': { sendNoticeToGameClient() {}, sendNoticeToClient() {} },
+            '../service/telegram': { notify: async () => {} }
+        });
+        await dao[method]({ group_nickname: 'A' });
+        for (const table of ['points_log', 'score_operation_record']) {
+            const entry = transaction.find(item => item.sql.includes('INSERT INTO ' + table));
+            assert.match(entry.sql, /exchange_ratio/);
+            assert.equal(Number(entry.args[entry.args.length - 1]), 2.5);
+            assert.equal((entry.sql.match(/\?/g) || []).length, entry.args.length);
+        }
+    }
 });

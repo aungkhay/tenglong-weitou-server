@@ -152,7 +152,7 @@ router.post('/get_exchange_info', async function(req, res) {
                 obj.rebate_amount = item.score_change; // 返水金额
                 obj.option_time = util.transDate(item.stime);
                 obj.memo = item.memo;
-                obj.personal_points_redemption_ratio = item.personal_points_redemption_ratio ? item.personal_points_redemption_ratio: null;
+                obj.personal_points_redemption_ratio = item.exchange_ratio ? Number(item.exchange_ratio) : item.personal_points_redemption_ratio ? item.personal_points_redemption_ratio: null;
                 obj.exchange_type = item.exchange_type;
                 obj.exchange_date = item.exchange_date ? moment(item.exchange_date).format('YYYY-MM-DD') : null;
                 obj.operator = item.operator;

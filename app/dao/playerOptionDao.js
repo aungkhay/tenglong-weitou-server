@@ -448,6 +448,10 @@ playerOptionDao.getScoreOptionRecord = async function (msg) {
             [...args, start, size]
         );
 
+        listRows.forEach(item => {
+            item.exchange_ratio = item.exchange_ratio == null ? null : Number(item.exchange_ratio);
+        });
+
         // 返回数据，带上全局合计数据 summary
         return {
             err: null,
