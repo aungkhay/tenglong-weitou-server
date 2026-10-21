@@ -10,6 +10,7 @@ let systemDao = require('../../dao/systemDao');
 let userDao = require('../../dao/userDao');
 const { sendRequest, getGroupInfo }  = require('../../chat/sendGroupMessage.js');
 const sendChat = require("../../chat/sendChat")
+const exchangePointsCommand = require('../../chat/exchangePointsCommand');
 let util = require('../../util/utils');
 let CODE = require('../../util/code');
 const GAMESTATE = require('../../util/gameMsg');
@@ -968,6 +969,8 @@ router.post('/bot', async function(req, res) {
         console.log("[忽略管理员普通消息] senderId=" + senderId + ", content=" + content);
         return;
     }
+
+    if (await exchangePointsCommand({ content, senderId, chatId, msgId, clientId })) return;
 
     // 去掉换行、制表，再去掉所有类型的空白（包括全角/零宽空格），准备解析
     const rawContent = String(content || "").replace(/[\r\n]+/g, ' ').trim();

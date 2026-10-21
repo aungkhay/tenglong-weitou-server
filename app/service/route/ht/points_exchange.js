@@ -3,6 +3,7 @@ let router = express.Router();
 let pomelo = require("pomelo");
 let redlock = pomelo.app.get('redlock');
 let pointsExchangeDao = require('../../../dao/pointsExchangeDao');
+const playerPointsExchange = require('../../playerPointsExchange');
 let systemDao = require('../../../dao/systemDao');
 let util = require('../../../util/utils');
 const moment = require('moment');
@@ -12,7 +13,6 @@ module.exports = router;
 
 router.post('/single_player_all_group_exchange', async function(req, res) {    
     let msg = req.body.data?req.body.data:req.body;
-    let lock = await redlock.lock("single_player_all_group_exchange:",3000);  
 
     try {
         
@@ -20,10 +20,7 @@ router.post('/single_player_all_group_exchange', async function(req, res) {
             return res.send({code:500,msg:"请指定玩家",data:null}); 
         }
 
-        let groupInfo = await systemDao.getStatisticsDateByAnyGroup();
-        if(groupInfo.data)msg.statistics_date = moment(groupInfo.data.statistics_date).format('YYYY-MM-DD');
-        
-        let row = await pointsExchangeDao.singlePlayerAllGroupExchange(msg);
+        let row = await playerPointsExchange(msg);
         if (row.data && row.data.res ) {
 
             let r = await systemDao.getOptionIdByPlayer(msg);
@@ -41,7 +38,6 @@ router.post('/single_player_all_group_exchange', async function(req, res) {
             return res.send({code:500,msg:row.err,data:null}); 
         }
     } catch (err) {
-        lock.unlock();
         console.log("err:",JSON.stringify(err));
         return res.send({code:500,msg:"服务器繁忙",data:null});
     }
