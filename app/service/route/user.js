@@ -39,7 +39,7 @@ async function login(req, res, isControl) {
                 ? Token.createControl(user.Id, Date.now(), secret)
                 : Token.create(user.Id, Date.now(), secret);
             await userDao.editUserLoginInfo(msg.username,util.getClientIP(req),"","");
-            if (!isControl) await loginSession.register(user.Id, token);
+            await loginSession.register(user.Id, token, isControl);
             console.log("登录成功")
             return res.send(
             {
@@ -67,9 +67,9 @@ async function login(req, res, isControl) {
 }
 
 router.post('/agent_login', async function(req, res) {
+    let loginLock;
     try {
-        let msg = req.body.data?req.body.data:req.body;
-        await redlock.lock("agent_login:" + msg.userName,3000);
+        let msg = req.body.data ? req.body.data : req.body;
 
         let user = await userDao.getAdminByName(msg.username);                                 
         user = user.data;
@@ -82,11 +82,14 @@ router.post('/agent_login', async function(req, res) {
         }
 
         let pw = md5(user.salt + msg.password);
+        console.log(pw)
         if (user.password != pw ) {
             return res.send({code:500,msg:"账号或者密码错误",data:null});                                                   
         } else {
+            loginLock = await redlock.lock("login:" + user.Id, 3000);
             let token = Token.create(user.Id, Date.now(), secret);
             await userDao.editUserLoginInfo(msg.username,util.getClientIP(req),"","");
+            await loginSession.register(user.Id, token);
             console.log("登录成功")
             return res.send(
             {
@@ -103,7 +106,13 @@ router.post('/agent_login', async function(req, res) {
         }
     } catch (err) {
         console.log("err:",JSON.stringify(err));
-        return { err: err, data: null }
+        return res.send({code:500,msg:"登录失败，请稍后重试",data:null});
+    } finally {
+        if (loginLock) {
+            try { await loginLock.unlock(); } catch (err) {
+                console.error('[登录锁释放失败]', err.message);
+            }
+        }
     }
 })
 

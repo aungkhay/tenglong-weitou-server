@@ -32,9 +32,9 @@ pro.auth = async function(token, options = {}) {
 	if(user.err) {
 		return {err:user.err,data:null};
 	}
-	if (user.data && Number(user.data.permissions) === 2 && !isControl) {
+	if (user.data) {
 		try {
-			if (!await loginSession.isCurrent(user.data.Id, token)) {
+			if (!await loginSession.isCurrent(user.data.Id, token, isControl)) {
 				return {err:Code.ENTRY.FA_LOGIN_REPLACED,msg:'账号已在其他终端登录或登录已失效，请重新登录',data:null};
 			}
 		} catch (err) {

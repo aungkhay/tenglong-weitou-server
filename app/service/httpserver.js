@@ -87,6 +87,7 @@ async function tokenMiddleware(req, res, next) {
         userId: r.data.Id,
         userName: r.data.username
     };
+    req.body = req.body || {};
     req.body.userId = r.data.Id;
     req.body.userName = r.data.username;
     

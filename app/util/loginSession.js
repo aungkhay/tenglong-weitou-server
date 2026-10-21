@@ -6,31 +6,35 @@ const TOKEN_LIFETIME_SECONDS = 200 * 60 * 60;
 const keyFor = uid => 'game:login-token:' + String(uid);
 const fingerprint = token => crypto.createHash('sha256').update(String(token)).digest('hex');
 
-function currentFingerprint(uid) {
+function currentFingerprint(uid, controlToken) {
     return new Promise((resolve, reject) => {
-        pomelo.app.get('redis').get(keyFor(uid), (err, value) => {
+        const key = controlToken ? 'control:login-token:' + String(uid) + ':' + fingerprint(controlToken) : keyFor(uid);
+        pomelo.app.get('redis').get(key, (err, value) => {
             if (err) return reject(err);
             resolve(value);
         });
     });
 }
 
-async function isCurrent(uid, token) {
-    const current = await currentFingerprint(uid);
+async function isCurrent(uid, token, isControl = false) {
+    const current = await currentFingerprint(uid, isControl ? token : undefined);
     // Redis 中不存在当前登录时也不放行，避免旧 token 在过期/缓存丢失后复活。
     return Boolean(current && token && current === fingerprint(token));
 }
 
-function register(uid, token) {
+function register(uid, token, isControl = false) {
     // 原子保存当前 token 指纹并通知所有 connector；不在 Redis 消息中传明文 token。
     const script = `
         redis.call('SET', KEYS[1], ARGV[1], 'EX', ARGV[2])
-        redis.call('PUBLISH', ARGV[3], ARGV[4])
+        if ARGV[5] ~= 'control' then
+            redis.call('PUBLISH', ARGV[3], ARGV[4])
+        end
         return 1
     `;
     return new Promise((resolve, reject) => {
-        pomelo.app.get('redis').eval(script, 1, keyFor(uid), fingerprint(token),
-            TOKEN_LIFETIME_SECONDS, CHANNEL, JSON.stringify({ uid: String(uid) }), (err, result) => {
+        const key = isControl ? 'control:login-token:' + String(uid) + ':' + fingerprint(token) : keyFor(uid);
+        pomelo.app.get('redis').eval(script, 1, key, fingerprint(token),
+            TOKEN_LIFETIME_SECONDS, CHANNEL, JSON.stringify({ uid: String(uid) }), isControl ? 'control' : 'game', (err, result) => {
                 if (err) return reject(err);
                 resolve(result);
             });

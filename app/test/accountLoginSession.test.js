@@ -7,7 +7,7 @@ const vm = require('vm');
 const { EventEmitter } = require('events');
 const tokenService = require('../util/token');
 const Code = require('../util/code');
-const md5 = require('js-md5');
+const md5 = value => require('crypto').createHash('md5').update(value).digest('hex');
 const secret = 'account-login-test-secret';
 const quiet = { log() {}, error() {} };
 
@@ -32,11 +32,11 @@ async function main() {
             if (holdRead) return holdRead(key, cb);
             cb(null, values.get(key) || null);
         },
-        eval(script, n, key, value, ttl, channel, event, cb) {
+        eval(script, n, key, value, ttl, channel, event, scope, cb) {
             if (redisError) return cb(new Error('redis unavailable'));
             assert.equal(ttl, 200 * 60 * 60);
             values.set(key, value);
-            subscribers.forEach(sub => sub.emit('message', channel, event));
+            if (scope !== 'control') subscribers.forEach(sub => sub.emit('message', channel, event));
             cb(null, 1);
         },
         duplicate() {
@@ -86,7 +86,12 @@ async function main() {
     await sessions.register(2, tokenOther);
     assert((await auth.auth(tokenA)).data);
     assert.notEqual(values.get('game:login-token:1'), tokenA);
-    assert((await auth.auth(tokenService.create(3, Date.now(), secret))).data, 'agent login unaffected');
+    const agentToken = tokenService.create(3, Date.now(), secret);
+    assert.equal((await auth.auth(agentToken)).err, Code.ENTRY.FA_LOGIN_REPLACED);
+    await sessions.register(3, agentToken);
+    assert((await auth.auth(agentToken)).data);
+    values.delete('game:login-token:3');
+    assert.equal((await auth.auth(agentToken)).err, Code.ENTRY.FA_LOGIN_REPLACED, 'agent revocation checked on every request');
 
     const timers = [];
     class Server extends EventEmitter {
@@ -221,20 +226,23 @@ async function main() {
     assert.equal(unauthorizedGameSocket.clientType, null);
     assert.equal(unauthorizedGameSocket.messages[0].errCode, Code.ENTRY.FA_TOKEN_SCOPE);
     redisError = true;
-    assert((await auth.auth(controlA, { allowControl: true })).data, 'tool login is independent of game-session Redis');
+    assert.equal((await auth.auth(controlA, { allowControl: true })).err, Code.ENTRY.FA_SESSION_UNAVAILABLE);
     redisError = false;
 
     const httpSource = fs.readFileSync(path.join(__dirname, '../service/httpserver.js'), 'utf8');
     const middlewareContext = { auth, chkIp: async () => true, console: quiet };
     vm.runInNewContext(httpSource.slice(httpSource.indexOf('async function tokenMiddleware('),
         httpSource.indexOf('// 统一应用拦截器')), middlewareContext);
-    async function httpCheck(url, token, shouldPass, method = 'POST') {
+    async function httpCheck(url, token, shouldPass, method = 'POST', expectedError = Code.ENTRY.FA_TOKEN_SCOPE) {
         let passed = false, status, reply;
         const responseStub = { status: s => { status = s; return responseStub; }, json: r => { reply = r; } };
         await middlewareContext.tokenMiddleware({ method, path: url, headers: { token },
             socket: { remoteAddress: '127.0.0.1' }, body: { allowControl: true } }, responseStub, () => { passed = true; });
         assert.equal(passed, shouldPass, url);
-        if (!shouldPass) { assert.equal(status, 403); assert.equal(reply.errCode, Code.ENTRY.FA_TOKEN_SCOPE); }
+        if (!shouldPass) {
+            assert.equal(status, expectedError === Code.ENTRY.FA_SESSION_UNAVAILABLE ? 503 : 403);
+            assert.equal(reply.errCode, expectedError);
+        }
     }
     await httpCheck('/opt/send_index', controlA, true);
     await httpCheck('/system/get_group_pull_data_by_nickname', controlB, true);
@@ -242,6 +250,29 @@ async function main() {
     await httpCheck('/opt/send_index', controlA, false, 'GET');
     await httpCheck('/opt/desk_operation', controlA, false);
     await httpCheck('/ht/financial_inquiries/zc_details_inquiry', controlB, false);
+    values.delete('control:login-token:1:' + sessions.fingerprint(controlA));
+    assert.equal((await auth.auth(controlA, { allowControl: true })).err, Code.ENTRY.FA_LOGIN_REPLACED);
+    assert((await auth.auth(controlB, { allowControl: true })).data, 'control sessions can be revoked individually');
+    await httpCheck('/opt/send_index', controlA, false, 'POST', Code.ENTRY.FA_LOGIN_REPLACED);
+    const originalGetByName = userDao.getAdminByName;
+    userDao.getAdminByName = async () => ({ data: { Id: 3, permissions: 1, salt: 'salt', password: md5('saltpw') } });
+    await routes['/agent_login']({ body: { username: 'agent', password: 'pw' } }, res);
+    assert.equal(response.code, 200);
+    const firstAgentToken = response.data.token;
+    await httpCheck('/ht/financial_inquiries/zc_details_inquiry', firstAgentToken, true);
+    await routes['/agent_login']({ body: { username: 'agent', password: 'pw' } }, res);
+    assert.equal(response.code, 200);
+    const latestAgentToken = response.data.token;
+    await httpCheck('/ht/financial_inquiries/zc_details_inquiry', firstAgentToken, false, 'POST', Code.ENTRY.FA_LOGIN_REPLACED);
+    await httpCheck('/ht/financial_inquiries/zc_details_inquiry', latestAgentToken, true);
+    redisError = true;
+    await httpCheck('/ht/financial_inquiries/zc_details_inquiry', latestAgentToken, false, 'POST', Code.ENTRY.FA_SESSION_UNAVAILABLE);
+    await routes['/agent_login']({ body: { username: 'agent', password: 'pw' } }, res);
+    assert.equal(response.code, 500, 'failed Redis registration must not issue a successful login');
+    redisError = false;
+    values.delete('game:login-token:3');
+    await httpCheck('/ht/financial_inquiries/zc_details_inquiry', latestAgentToken, false, 'POST', Code.ENTRY.FA_LOGIN_REPLACED);
+    userDao.getAdminByName = originalGetByName;
     assert.equal((await auth.auth(tokenService.createControl(1, Date.now() - 201 * 60 * 60 * 1000, secret),
         { allowControl: true })).err, Code.ENTRY.FA_TOKEN_EXPIRE);
     console.log('PASS: account replacement, old-token rejection, RPC/WebSocket isolation, control login coexistence, game/control independence, signed scope and HTTP allowlist, expiration and Redis failures');
